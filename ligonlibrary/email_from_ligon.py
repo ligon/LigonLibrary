@@ -11,7 +11,7 @@ def is_html(s):
     """
     return s[0]=='<'  # Very poor test!
 
-def email_from_ligon(emails):
+def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
     """Create and send email from ligon@berkeley.edu.
 
        - emails : A dictionary with keys which are "to" email addresses, and
@@ -34,7 +34,7 @@ def email_from_ligon(emails):
                 message = MIMEText(body[1],'html')
 
             message['Subject'] = body[0]
-            message['From'] = "ligon@berkeley.edu"
+            message['From'] = from_email
             message['To'] = to
             #message['Cc'] = 'eep153@ligon.org'
 
