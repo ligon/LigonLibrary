@@ -15,7 +15,7 @@ from lsms import from_dta
 import pyreadstat
 
 @lru_cache(maxsize=3)
-def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False):
+def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False,sheet=None):
     """From a file named fn, try to return a dataframe.
 
     Hope is that caller can be agnostic about file type,
@@ -40,7 +40,7 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         except FileNotFoundError:
             return False
 
-    def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding):
+    def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
         if isinstance(f,str):
             try:
                 return pd.read_spss(f,convert_categoricals=convert_categoricals)
@@ -66,7 +66,7 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
 
         try:
             f.seek(0)
-            return pd.read_excel(f)
+            return pd.read_excel(f,sheet_name=sheet)
         except (pd.errors.ParserError, UnicodeDecodeError, ValueError):
             pass
 
