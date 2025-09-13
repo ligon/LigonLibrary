@@ -31,15 +31,6 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         except FileNotFoundError:
             return False
 
-    def file_system_path(fn):
-    # is the file a relative path or it's the full path from our fs (DVCFileSystem)?
-        try:
-            with DVCFS.open(fn) as f:
-                pass
-            return True
-        except FileNotFoundError:
-            return False
-
     def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
         if isinstance(f,str):
             try:
@@ -85,22 +76,11 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
 
         raise ValueError(f"Unknown file type for {fn}.")
 
-    if local_file(fn):
-        try:
-            with open(fn,mode='rb') as f:
-                df = read_file(f,convert_categoricals=convert_categoricals,encoding=encoding)
-        except (TypeError,ValueError): # Needs filename?
-            df = read_file(fn,convert_categoricals=convert_categoricals,encoding=encoding)
-    elif file_system_path(fn):
-        try:
-            with DVCFS.open(fn,mode='rb') as f:
-                df = read_file(f,convert_categoricals=convert_categoricals,encoding=encoding)
-        except TypeError: # Needs filename?
-            df = read_file(fn,convert_categoricals=convert_categoricals,encoding=encoding)
-
-    else:
-        with dvc.api.open(fn,mode='rb') as f:
+    try:
+        with open(fn,mode='rb') as f:
             df = read_file(f,convert_categoricals=convert_categoricals,encoding=encoding)
+    except (TypeError,ValueError): # Needs filename?
+        df = read_file(fn,convert_categoricals=convert_categoricals,encoding=encoding)
 
     return df
 
