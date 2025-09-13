@@ -1,13 +1,21 @@
-[tool.poetry]
+[project]
 name = "ligonlibrary"
-version = "0.1.0"
-description = ""
-authors = ["Ethan Ligon <ligon@berkeley.edu>"]
+version = "0.1.3"
+description = "Various little hacks."
+requires-python = ">=3.11"
 readme = "README.md"
+authors = [ {name = "Ethan Ligon", email = "ligon@berkeley.edu"}
+    ]
+license = {text = "CC-BY-4.0"}
+
+
+[tool.poetry]
 
 [tool.poetry.dependencies]
-python = "^3.11"
-
+pandas = "^2.3.1"
+google-auth-oauthlib = "^1.2.2"
+fuzzywuzzy = "^0.18.0"
+google-api-python-client = "^2.178.0"
 
 [build-system]
 requires = ["poetry-core"]
