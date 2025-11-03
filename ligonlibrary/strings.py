@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Handy string functions.
 """
-from fuzzywuzzy import fuzz
+from thefuzz import fuzz, process
 
 def normalized(s,case='lower'):
     """
@@ -49,3 +49,23 @@ def similar(str1, str2, similarity_threshold=85):
 
     # Return True if the similarity score is above the threshold
     return similarity_score >= similarity_threshold
+
+def most_similar(s,slist,similarity_threshold=85,verbose=False,return_similarity=False):
+
+    out = process.extractOne(s,slist,score_cutoff=similarity_threshold)
+
+    if out is None and verbose:
+        #print(f"No match for {s} with threshold {similarity_threshold}.")
+        return
+
+    if verbose and out is not None:
+        if out[1]<100:
+            print(f"{s} matched to {out[0]} with score {out[1]}")
+
+    if out is not None:
+        if return_similarity:
+            return out[0],out[1]
+        else:
+            return out[0]
+    else:
+        return

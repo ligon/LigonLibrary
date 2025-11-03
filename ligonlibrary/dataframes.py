@@ -101,8 +101,9 @@ from typing import Callable, Dict, Set
 def find_similar_pairs(
     s1: pd.Series,
     s2: pd.Series,
-    similar: Callable[[str, str], bool]=strings.similar
-) -> Dict[str, str]:
+    similarity_threshold=85,
+    verbose=False) -> Dict[str, str]:
+
     """
     Find pairs of similar strings between two pandas Series.
 
@@ -115,9 +116,7 @@ def find_similar_pairs(
         First series of strings to compare
     s2 : pd.Series
         Second series of strings to compare
-    similar : Callable[[str, str], bool]
-        Comparison function that takes two strings and returns True if they're
-        considered similar
+    similarity_threshold : How demanding is match?
 
     Returns:
     --------
@@ -131,18 +130,24 @@ def find_similar_pairs(
     used_s2 = set()  # Track s2 strings already matched
 
     # Convert series to sets for faster lookup and to avoid duplicates
-    s1_strings = set(s1.dropna())
-    s2_strings = set(s2.dropna())
+    if isinstance(s1,(list,tuple,set)):
+        s1_strings = set(s1)
+    else:
+        s1_strings = set(s1.dropna())
+
+    if isinstance(s2,(list,tuple,set)):
+        s2_strings = set(s2)
+    else:
+        s2_strings = set(s2.dropna())
 
     for str1 in s1_strings:
         if str1 in result:
             continue  # Already matched
 
-        # Find first unmatched s2 string that's similar
-        for str2 in s2_strings:
-            if str2 not in used_s2 and similar(str1, str2):
-                result[str1] = str2
-                used_s2.add(str2)
-                break  # Move to next s1 string after first match
+        out = strings.most_similar(str1,s2_strings,similarity_threshold=similarity_threshold,verbose=verbose,return_similarity=True)
+
+        if out is not None:
+            name, score = out
+            result[str1] = name
 
     return result
