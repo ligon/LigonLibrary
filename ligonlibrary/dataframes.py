@@ -1,18 +1,97 @@
 #!/usr/bin/env python3
 
-"""Miscellany of tools for manipulating dataframes.
-"""
+"""Miscellany of tools for manipulating dataframes."""
+import struct
+import warnings
+
 import pandas as pd
-import dvc.api
-from . import strings
-from pyarrow.lib import ArrowInvalid
+
+try:
+    from pyarrow.lib import ArrowInvalid
+except ImportError:  # pragma: no cover - optional dependency
+    class ArrowInvalid(Exception):  # type: ignore
+        """Fallback ArrowInvalid when pyarrow is unavailable."""
+
+        pass
 from functools import lru_cache
-from pathlib import Path
-from cfe.df_utils import df_to_orgtbl
-from importlib.resources import files
-from dvc.api import DVCFileSystem
-from lsms import from_dta
-import pyreadstat
+
+try:
+    from cfe.df_utils import df_to_orgtbl  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    df_to_orgtbl = None  # type: ignore
+
+try:
+    import dvc.api  # noqa: F401  # pragma: no cover
+    from dvc.api import DVCFileSystem  # noqa: F401  # pragma: no cover
+except ImportError:  # pragma: no cover - optional dependency
+    dvc = None  # noqa: F401
+    DVCFileSystem = None  # type: ignore
+
+
+def _coerce_label(value, encoding):
+    """Return `value` recoded to UTF-8 using the supplied encoding."""
+    if encoding is None or value is None:
+        return value
+    if isinstance(value, bytes):
+        return value.decode(encoding, errors="ignore")
+    return str(value).encode(encoding, errors="ignore").decode("utf-8", errors="ignore")
+
+
+def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False):
+    """Read a Stata .dta file into a pandas DataFrame.
+
+    Parameters
+    ----------
+    fn : str | pathlib.Path | file-like
+        Location of the Stata file or an open binary handle.
+    convert_categoricals : bool, optional
+        When true (default) map labelled columns to their string labels.
+    encoding : str, optional
+        Original character encoding for categorical labels, used to coerce
+        values to UTF-8 when provided.
+    categories_only : bool, optional
+        When true, return the mapping of categorical metadata without
+        materializing the DataFrame.
+    """
+
+    with pd.io.stata.StataReader(fn) as reader:
+        try:
+            df = reader.read(convert_dates=True, convert_categoricals=False)
+        except struct.error as exc:
+            raise ValueError("Not a Stata file?") from exc
+
+        values = reader.value_labels()
+        try:
+            var_names = reader.varlist
+            label_names = reader.lbllist
+        except AttributeError:
+            var_names = reader._varlist
+            label_names = reader._lbllist
+
+    var_to_label = dict(zip(var_names, label_names))
+    cats = {}
+
+    if convert_categoricals:
+        for var in var_names:
+            label_key = var_to_label.get(var)
+            if not label_key:
+                continue
+            try:
+                code_to_label = values[label_key]
+            except KeyError:
+                warnings.warn(f"Issue with categorical mapping: {var}", RuntimeWarning)
+                continue
+            if encoding:
+                code_to_label = {
+                    code: _coerce_label(label, encoding) for code, label in code_to_label.items()
+                }
+            df[var] = df[var].replace(code_to_label)
+            cats[var] = code_to_label
+
+    if categories_only:
+        return cats
+
+    return df
 
 @lru_cache(maxsize=3)
 def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False,sheet=None):
@@ -87,6 +166,8 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
 def normalize_strings(df,**kwargs):
     """Normalize strings in a dataframe.
     """
+    from . import strings
+
     def normalize_string(s):
         if isinstance(s, str):
             return strings.normalized(s,**kwargs)
@@ -103,6 +184,7 @@ def find_similar_pairs(
     s2: pd.Series,
     similarity_threshold=85,
     verbose=False) -> Dict[str, str]:
+    from . import strings
 
     """
     Find pairs of similar strings between two pandas Series.

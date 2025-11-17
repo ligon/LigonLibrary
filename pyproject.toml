@@ -1,6 +1,6 @@
 [project]
 name = "ligonlibrary"
-version = "0.1.3"
+version = "0.1.4"
 description = "Various little hacks."
 requires-python = ">=3.11"
 readme = "README.md"
@@ -16,6 +16,9 @@ pandas = "^2.3.1"
 google-auth-oauthlib = "^1.2.2"
 fuzzywuzzy = "^0.18.0"
 google-api-python-client = "^2.178.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0"
 
 [build-system]
 requires = ["poetry-core"]
