@@ -14,7 +14,7 @@ license = {text = "CC-BY-4.0"}
 [tool.poetry.dependencies]
 pandas = "^2.3.1"
 google-auth-oauthlib = "^1.2.2"
-fuzzywuzzy = "^0.18.0"
+thefuzz = "^0.22.1"
 google-api-python-client = "^2.178.0"
 
 [tool.poetry.group.dev.dependencies]
