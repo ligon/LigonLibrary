@@ -6,10 +6,7 @@ from requests import HTTPError
 from googleapiclient.discovery import build
 
 def is_html(s):
-    """
-    Is string s an html string?
-    """
-    return s[0]=='<'  # Very poor test!
+    return bool(s) and s.lstrip().startswith('<')
 
 def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
     """Create and send email from ligon@berkeley.edu.
@@ -29,9 +26,9 @@ def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
 
         for to,body in emails.items():
             if is_html(body[1]):
-                message = MIMEText(body[1],'html')
+                message = MIMEText(body[1], 'html')
             else:
-                message = MIMEText(body[1],'html')
+                message = MIMEText(body[1], 'plain')
 
             message['Subject'] = body[0]
             message['From'] = from_email
