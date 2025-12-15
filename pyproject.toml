@@ -16,9 +16,13 @@ pandas = "^2.3.1"
 google-auth-oauthlib = "^1.2.2"
 thefuzz = "^0.22.1"
 google-api-python-client = "^2.178.0"
+gspread = "^5.12.0"
+gspread-pandas = "^3.3.0"
+python-gnupg = "^0.5.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0"
+ipython = "^8.12"
 
 [build-system]
 requires = ["poetry-core"]
