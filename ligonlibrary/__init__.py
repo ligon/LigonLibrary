@@ -11,6 +11,8 @@ from .sheets import (  # noqa: F401
     write_sheet,
 )
 
+from .email_from_ligon import email_from_ligon
+
 try:  # pragma: no cover - fallback during editable installs
     __version__ = version("ligonlibrary")
 except PackageNotFoundError:  # pragma: no cover
@@ -23,5 +25,6 @@ __all__ = [
     "read_public_sheet",
     "read_sheets",
     "write_sheet",
+    "email_from_ligon",
     "__version__",
 ]
