@@ -75,8 +75,11 @@ def _validate_html_body(html_body: str):
         raise ValueError("; ".join(parser.errors))
 
 
-def _format_addresses(addresses: Iterable[str]) -> str:
+def _format_addresses(addresses: Iterable[str] | str) -> str:
     """Ensure addresses are RFC-compliant and dedented of display names."""
+    if isinstance(addresses, str):
+        addresses = (addresses,)
+
     formatted = []
     for raw in addresses:
         name, addr_spec = parseaddr(raw)
