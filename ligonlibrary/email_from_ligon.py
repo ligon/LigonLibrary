@@ -3,6 +3,7 @@ import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html.parser import HTMLParser
+from email.utils import Address, parseaddr
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
@@ -72,6 +73,17 @@ def _validate_html_body(html_body: str):
         parser.errors.append(f"Unclosed tags: {parser.stack!r}")
     if parser.errors:
         raise ValueError("; ".join(parser.errors))
+
+
+def _format_addresses(addresses: Iterable[str]) -> str:
+    """Ensure addresses are RFC-compliant and dedented of display names."""
+    formatted = []
+    for raw in addresses:
+        name, addr_spec = parseaddr(raw)
+        if not addr_spec:
+            raise ValueError(f"Invalid email address: {raw!r}")
+        formatted.append(str(Address(display_name=name or None, addr_spec=addr_spec)))
+    return ", ".join(formatted)
 
 
 def _coerce_cc(cc):
@@ -144,10 +156,10 @@ def _compose_message(to: str, content: EmailContent, from_email: str):
         message = MIMEText(content.body, subtype)
 
     message["Subject"] = content.subject
-    message["From"] = from_email
-    message["To"] = to
+    message["From"] = _format_addresses((from_email,))
+    message["To"] = _format_addresses((to,))
     if content.cc:
-        message["Cc"] = ", ".join(content.cc)
+        message["Cc"] = _format_addresses(content.cc)
 
     return message
 

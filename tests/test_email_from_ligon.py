@@ -6,6 +6,7 @@ from ligonlibrary.email_from_ligon import (
     ENV_EMAIL_CREDENTIALS,
     EmailContent,
     _as_email_content,
+    _format_addresses,
     _compose_message,
     _resolve_credentials_path,
     email_from_ligon,
@@ -59,6 +60,11 @@ def test_compose_message_raises_on_mismatched_html():
 
     with pytest.raises(ValueError):
         _compose_message("to@example.com", content, "from@example.com")
+
+
+def test_format_addresses_parses_display_names():
+    formatted = _format_addresses(["Name <user@example.com>", "other@example.com"])
+    assert formatted == "Name <user@example.com>, other@example.com"
 
 
 @pytest.mark.skipif(
