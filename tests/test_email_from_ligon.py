@@ -72,6 +72,7 @@ def test_email_from_ligon_with_cc():
                 subject="Test message from automated test",
                 body="This is a test message triggered by RUN_EMAIL_FROM_LIGON_TEST=1.",
                 cc=("cc@ligon.org",),
+                html_body="<p>This is a <strong>test</strong> message triggered by RUN_EMAIL_FROM_LIGON_TEST=1.</p>",
             )
         },
         from_email="ligon@berkeley.edu",
