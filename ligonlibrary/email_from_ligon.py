@@ -86,7 +86,7 @@ def _format_addresses(addresses: Iterable[str] | str) -> str:
         name, addr_spec = parseaddr(raw)
         if not addr_spec:
             raise ValueError(f"Invalid email address: {raw!r}")
-        formatted.append(str(Address(display_name=name or None, addr_spec=addr_spec)))
+        formatted.append(str(Address(display_name=name or "", addr_spec=addr_spec)))
     return ", ".join(formatted)
 
 
