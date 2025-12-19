@@ -8,6 +8,7 @@ from ligonlibrary.email_from_ligon import (
     _as_email_content,
     _format_addresses,
     _compose_message,
+    _send_with_retry,
     _resolve_credentials_path,
     email_from_ligon,
 )
@@ -65,6 +66,42 @@ def test_compose_message_raises_on_mismatched_html():
 def test_format_addresses_parses_display_names():
     formatted = _format_addresses(["Name <user@example.com>", "other@example.com"])
     assert formatted == "Name <user@example.com>, other@example.com"
+
+
+def test_send_with_retry_backoff(monkeypatch):
+    calls = []
+
+    class FakeResp:
+        status = 429
+
+    class FakeSend:
+        def __init__(self):
+            self.count = 0
+
+        def execute(self):
+            self.count += 1
+            if self.count < 3:
+                exc = HttpError(FakeResp(), b"rate limit")
+                raise exc
+            return {"id": "ok"}
+
+    class FakeService:
+        def users(self):
+            return self
+
+        def messages(self):
+            return self
+
+        def send(self, userId, body):
+            calls.append((userId, body))
+            return FakeSend()
+
+    # Make time.sleep a no-op to keep test fast
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+
+    out = _send_with_retry(FakeService(), {"raw": "x"}, max_retries=3, base_sleep=0)
+    assert out == {"id": "ok"}
+    assert calls[0][0] == "me"
 
 
 @pytest.mark.skipif(

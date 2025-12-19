@@ -6,10 +6,12 @@ from email.mime.text import MIMEText
 from email.utils import parseaddr
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Iterable, NamedTuple
+import time
+from typing import Iterable, NamedTuple, Optional
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from requests import HTTPError
 
 
@@ -86,8 +88,23 @@ def _format_addresses(addresses: Iterable[str] | str) -> str:
         name, addr_spec = parseaddr(raw)
         if not addr_spec:
             raise ValueError(f"Invalid email address: {raw!r}")
-        formatted.append(str(Address(display_name=name or "", addr_spec=addr_spec)))
+        display_name = name or ""
+        formatted.append(str(Address(display_name=display_name, addr_spec=addr_spec)))
     return ", ".join(formatted)
+
+
+def _send_with_retry(service, message_body, max_retries: int = 3, base_sleep: float = 0.2):
+    """Send a message with basic backoff on rate limits."""
+    for attempt in range(max_retries):
+        try:
+            return service.users().messages().send(userId="me", body=message_body).execute()
+        except HttpError as exc:
+            status = getattr(exc.resp, "status", None)
+            if status == 429 and attempt < max_retries - 1:
+                sleep_for = base_sleep * (2**attempt)
+                time.sleep(sleep_for)
+                continue
+            raise
 
 
 def _coerce_cc(cc):
@@ -194,7 +211,7 @@ def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
 
             create_message = {'raw': base64.urlsafe_b64encode(message.as_bytes()).decode()}
 
-            msg = (service.users().messages().send(userId="me", body=create_message).execute())
+            msg = _send_with_retry(service, create_message)
             print(f"Sent message to {message['To']} Message Id: {msg['id']}.")
     except HTTPError as error:
         print(F'An error occurred: {error}')
