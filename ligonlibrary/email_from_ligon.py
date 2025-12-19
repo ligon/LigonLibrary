@@ -1,9 +1,10 @@
 import base64
 import os
+from email.headerregistry import Address
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import parseaddr
 from html.parser import HTMLParser
-from email.utils import Address, parseaddr
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
