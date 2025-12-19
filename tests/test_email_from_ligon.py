@@ -6,6 +6,7 @@ from ligonlibrary.email_from_ligon import (
     ENV_EMAIL_CREDENTIALS,
     EmailContent,
     _as_email_content,
+    _compose_message,
     _resolve_credentials_path,
     email_from_ligon,
 )
@@ -37,6 +38,27 @@ def test_resolve_credentials_falls_back_to_home(monkeypatch, tmp_path):
     monkeypatch.delenv(ENV_EMAIL_CREDENTIALS, raising=False)
 
     assert _resolve_credentials_path() == cred_file
+
+
+def test_compose_message_multipart_when_html_present():
+    content = EmailContent("Subj", "Plain text", (), "<b>HTML</b>")
+
+    msg = _compose_message("to@example.com", content, "from@example.com")
+
+    assert msg.get_content_type() == "multipart/alternative"
+    parts = msg.get_payload()
+    assert len(parts) == 2
+    assert parts[0].get_content_type() == "text/plain"
+    assert parts[0].get_payload(decode=True).decode() == "Plain text"
+    assert parts[1].get_content_type() == "text/html"
+    assert parts[1].get_payload(decode=True).decode() == "<b>HTML</b>"
+
+
+def test_compose_message_raises_on_mismatched_html():
+    content = EmailContent("Subj", "Plain text", (), "<b>HTML")
+
+    with pytest.raises(ValueError):
+        _compose_message("to@example.com", content, "from@example.com")
 
 
 @pytest.mark.skipif(

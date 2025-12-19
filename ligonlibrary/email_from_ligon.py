@@ -1,6 +1,8 @@
 import base64
 import os
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
@@ -13,10 +15,63 @@ class EmailContent(NamedTuple):
     subject: str
     body: str
     cc: tuple[str, ...] = ()
+    html_body: str | None = None
 
 
 def is_html(s):
     return bool(s) and s.lstrip().startswith('<')
+
+
+_VOID_TAGS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
+
+
+class _LooseHTMLValidator(HTMLParser):
+    """Lightweight check for obvious mismatched/unclosed tags."""
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.errors = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in _VOID_TAGS:
+            self.stack.append(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        # Self-closing; nothing to track
+        return
+
+    def handle_endtag(self, tag):
+        if tag in _VOID_TAGS:
+            return
+        if not self.stack or self.stack[-1] != tag:
+            self.errors.append(f"Unexpected </{tag}>; open stack={self.stack!r}")
+        else:
+            self.stack.pop()
+
+
+def _validate_html_body(html_body: str):
+    parser = _LooseHTMLValidator()
+    parser.feed(html_body)
+    if parser.stack:
+        parser.errors.append(f"Unclosed tags: {parser.stack!r}")
+    if parser.errors:
+        raise ValueError("; ".join(parser.errors))
 
 
 def _coerce_cc(cc):
@@ -41,7 +96,10 @@ def _as_email_content(value):
         if len(value) == 3:
             subject, body, cc = value
             return EmailContent(subject, body, _coerce_cc(cc))
-    raise TypeError("Expected EmailContent or tuple of length 2 or 3 for email content.")
+        if len(value) == 4:
+            subject, body, cc, html_body = value
+            return EmailContent(subject, body, _coerce_cc(cc), html_body)
+    raise TypeError("Expected EmailContent or tuple of length 2, 3, or 4 for email content.")
 
 
 ENV_EMAIL_CREDENTIALS = "LIGONLIBRARY_EMAIL_CREDENTIALS"
@@ -74,11 +132,33 @@ def _resolve_credentials_path() -> Path:
     )
 
 
+def _compose_message(to: str, content: EmailContent, from_email: str):
+    """Build the MIME message, using multipart/alternative when HTML provided."""
+    if content.html_body is not None:
+        _validate_html_body(content.html_body)
+        message = MIMEMultipart("alternative")
+        message.attach(MIMEText(content.body, "plain"))
+        message.attach(MIMEText(content.html_body, "html"))
+    else:
+        subtype = "html" if is_html(content.body) else "plain"
+        message = MIMEText(content.body, subtype)
+
+    message["Subject"] = content.subject
+    message["From"] = from_email
+    message["To"] = to
+    if content.cc:
+        message["Cc"] = ", ".join(content.cc)
+
+    return message
+
+
 def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
     """Create and send email from ligon@berkeley.edu.
 
        - emails : A dictionary with keys which are "to" email addresses, and
-                  values which are either (subject, body) or EmailContent(subject, body, cc).
+                  values which are either (subject, body), (subject, body, cc),
+                  (subject, body, cc, html_body), or EmailContent(subject, body, cc, html_body).
+       - If html_body is provided, send multipart/alternative with both plain and HTML parts.
     """
     SCOPES = [
         "https://www.googleapis.com/auth/gmail.send"
@@ -94,16 +174,7 @@ def email_from_ligon(emails,from_email='ligon@berkeley.edu'):
         for to,body in emails.items():
             content = _as_email_content(body)
 
-            if is_html(content.body):
-                message = MIMEText(content.body, 'html')
-            else:
-                message = MIMEText(content.body, 'plain')
-
-            message['Subject'] = content.subject
-            message['From'] = from_email
-            message['To'] = to
-            if content.cc:
-                message['Cc'] = ', '.join(content.cc)
+            message = _compose_message(to, content, from_email)
 
             create_message = {'raw': base64.urlsafe_b64encode(message.as_bytes()).decode()}
 
