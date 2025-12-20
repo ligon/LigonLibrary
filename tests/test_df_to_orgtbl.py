@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from ligonlibrary.dataframes import df_to_orgtbl, orgtbl_to_df
+import pytest
 
 
 def test_df_to_orgtbl_basic_plain(show_tables):
@@ -104,3 +105,8 @@ def test_df_to_orgtbl_conf_intervals(show_tables):
     assert "[0.80,1.20]" in out
     if show_tables:
         print("\nCI table:\n", out)
+
+
+if __name__ == "__main__":
+    # Allow running via `python tests/test_df_to_orgtbl.py --show-tables`
+    pytest.main([__file__, "--show-tables", "-s"])
