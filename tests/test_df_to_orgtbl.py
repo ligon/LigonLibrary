@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ligonlibrary.dataframes import df_to_orgtbl
+from ligonlibrary.dataframes import df_to_orgtbl, orgtbl_to_df
 
 
 def test_df_to_orgtbl_basic_plain():
@@ -21,3 +21,32 @@ def test_df_to_orgtbl_with_standard_errors():
 
     assert "(0.1)" in out
     assert "(0.2)" in out
+
+
+def test_orgtbl_to_df_basic():
+    table = [
+        ["A", "B"],
+        ["1", "2"],
+        ["3", "4"],
+    ]
+
+    df = orgtbl_to_df(table, col_name_size=1)
+
+    assert list(df.columns) == ["A", "B"]
+    assert df.iloc[0, 0] == "1"
+    assert df.iloc[1, 1] == "4"
+
+
+def test_orgtbl_to_df_multirow_headers_and_index():
+    table = [
+        ["A1", "A2"],
+        ["B1", "B2"],
+        ["x", "1"],
+        ["y", "2"],
+    ]
+
+    df = orgtbl_to_df(table, col_name_size=2, index="B1")
+
+    assert list(df.columns) == ["('A1', 'A2')", "('B1', 'B2')"]
+    assert df.index.name == "B1"
+    assert "y" in df.index
