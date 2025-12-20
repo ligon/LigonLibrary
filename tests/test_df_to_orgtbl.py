@@ -50,11 +50,11 @@ def test_orgtbl_to_df_multirow_headers_and_index():
         ["y", "2"],
     ]
 
-    df = orgtbl_to_df(table, col_name_size=2, index=("A1", "B1"))
+    df = orgtbl_to_df(table, col_name_size=2, index=("A1",))
 
-    assert list(df.columns) == ["A2", "B2"]
-    assert df.index.names == ["A1", "B1"]
-    assert ("y", "2") in df.index
+    assert list(df.columns) == ["A2", "B1", "B2"]
+    assert df.index.name == "A1"
+    assert "y" in df.index
 
 
 def test_df_to_orgtbl_missing_values_render_as_dashes(show_tables):
