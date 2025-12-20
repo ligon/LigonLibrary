@@ -47,6 +47,11 @@ def df_to_orgtbl(
     If tdf is False and sedf is supplied then stars will decorate significant point estimates.
     If tdf is a df of t-statistics stars will decorate significant point estimates.
     """
+    def is_missing(x):
+        try:
+            return pd.isna(x)
+        except TypeError:
+            return False
 
     def mypop(x, index=-1):
         """Pop like a list, but pop of non-iterables returns x."""
@@ -215,7 +220,7 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
                 entry = "| \\(" + fmt + "\\) "
             else:
                 entry = "| " + fmt + " "
-            if np.isnan(x):
+            if is_missing(x):
                 return "| --- "
             else:
                 return entry % x
@@ -314,9 +319,9 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
             for j in df.columns:  # Now standard errors
                 s += "  "
                 try:
-                    if np.isnan(df[j][i]):  # Pt estimate miss
+                    if is_missing(df[j][i]):  # Pt estimate miss
                         se = ""
-                    elif np.isnan(sedf[j][i]):
+                    elif is_missing(sedf[j][i]):
                         se = "(---)"
                     else:
                         se = format_entry(sedf[j][i], se=True)
@@ -364,8 +369,13 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
             for j in df.columns:  # Now confidence intervals
                 s += "  "
                 try:
-                    ci = "[" + float_fmt + "," + float_fmt + "]"
-                    ci = ci % (conf_ints[0][j][i], conf_ints[1][j][i])
+                    lower = conf_ints[0][j][i]
+                    upper = conf_ints[1][j][i]
+                    if is_missing(lower) or is_missing(upper):
+                        ci = "---"
+                    else:
+                        ci = "[" + float_fmt + "," + float_fmt + "]"
+                        ci = ci % (lower, upper)
                 except KeyError:
                     ci = ""
                 entry = "| " + ci + "  "

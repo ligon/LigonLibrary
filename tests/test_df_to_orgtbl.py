@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from ligonlibrary.dataframes import df_to_orgtbl, orgtbl_to_df
@@ -50,3 +51,18 @@ def test_orgtbl_to_df_multirow_headers_and_index():
     assert list(df.columns) == ["('A1', 'A2')", "('B1', 'B2')"]
     assert df.index.name == "B1"
     assert "y" in df.index
+
+
+def test_df_to_orgtbl_missing_values_render_as_dashes():
+    df = pd.DataFrame(
+        {
+            "A": [1.0, None, pd.NA],
+            "B": [np.nan, 2.0, 3.0],
+        },
+        index=["r1", "r2", "r3"],
+    )
+
+    out = df_to_orgtbl(df, float_fmt="%.1f", math_delimiters=False)
+
+    # Expect three missing slots rendered as ---
+    assert out.count("---") >= 3
