@@ -50,10 +50,10 @@ def test_orgtbl_to_df_multirow_headers_and_index():
         ["y", "2"],
     ]
 
-    df = orgtbl_to_df(table, col_name_size=2, index=("A1",))
+    df = orgtbl_to_df(table, col_name_size=2, index="('A1', 'B1')")
 
-    assert list(df.columns) == ["A2", "B1", "B2"]
-    assert df.index.name == "A1"
+    assert list(df.columns) == ["('A2', 'B2')"]
+    assert df.index.name == "('A1', 'B1')"
     assert "y" in df.index
 
 
