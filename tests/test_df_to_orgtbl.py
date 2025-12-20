@@ -4,7 +4,7 @@ import pandas as pd
 from ligonlibrary.dataframes import df_to_orgtbl, orgtbl_to_df
 
 
-def test_df_to_orgtbl_basic_plain():
+def test_df_to_orgtbl_basic_plain(show_tables):
     df = pd.DataFrame({"A": [1.0, 2.0], "B": [3.0, 4.0]}, index=["row1", "row2"])
 
     out = df_to_orgtbl(df, float_fmt="%.1f", math_delimiters=False)
@@ -16,9 +16,11 @@ def test_df_to_orgtbl_basic_plain():
         "| row2  | 2.0 | 4.0 |\n"
     )
     assert out == expected
+    if show_tables:
+        print("\nBasic table:\n", out)
 
 
-def test_df_to_orgtbl_with_standard_errors():
+def test_df_to_orgtbl_with_standard_errors(show_tables):
     df = pd.DataFrame({"A": [1.0, 2.0]}, index=["row1", "row2"])
     sedf = pd.DataFrame({"A": [0.1, 0.2]}, index=df.index)
 
@@ -26,6 +28,8 @@ def test_df_to_orgtbl_with_standard_errors():
 
     assert "(0.1)" in out
     assert "(0.2)" in out
+    if show_tables:
+        print("\nSE table:\n", out)
 
 
 def test_orgtbl_to_df_basic():
@@ -57,7 +61,7 @@ def test_orgtbl_to_df_multirow_headers_and_index():
     assert "y" in df.index
 
 
-def test_df_to_orgtbl_missing_values_render_as_dashes():
+def test_df_to_orgtbl_missing_values_render_as_dashes(show_tables):
     df = pd.DataFrame(
         {
             "A": [1.0, None, pd.NA],
@@ -70,9 +74,11 @@ def test_df_to_orgtbl_missing_values_render_as_dashes():
 
     # Expect three missing slots rendered as ---
     assert out.count("---") >= 3
+    if show_tables:
+        print("\nMissing table:\n", out)
 
 
-def test_df_to_orgtbl_with_stars_from_tstats():
+def test_df_to_orgtbl_with_stars_from_tstats(show_tables):
     df = pd.DataFrame({"beta": [2.0]}, index=["x"])
     tdf = pd.DataFrame({"beta": [2.0]}, index=df.index)  # two stars (>1.96)
     sedf = pd.DataFrame({"beta": [0.5]}, index=df.index)
@@ -81,9 +87,11 @@ def test_df_to_orgtbl_with_stars_from_tstats():
 
     assert "2.00^{**}" in out
     assert "(0.50)" in out
+    if show_tables:
+        print("\nStars table:\n", out)
 
 
-def test_df_to_orgtbl_conf_intervals():
+def test_df_to_orgtbl_conf_intervals(show_tables):
     df = pd.DataFrame({"beta": [1.0]}, index=["x"])
     lower = pd.DataFrame({"beta": [0.8]}, index=df.index)
     upper = pd.DataFrame({"beta": [1.2]}, index=df.index)
@@ -98,3 +106,5 @@ def test_df_to_orgtbl_conf_intervals():
 
     assert "[0.80,0.80]" not in out  # ensure not duplicated
     assert "[0.80,1.20]" in out
+    if show_tables:
+        print("\nCI table:\n", out)
