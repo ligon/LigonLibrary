@@ -3,7 +3,9 @@
 """Miscellany of tools for manipulating dataframes."""
 import struct
 import warnings
+from warnings import warn
 
+import numpy as np
 import pandas as pd
 
 try:
@@ -16,17 +18,312 @@ except ImportError:  # pragma: no cover - optional dependency
 from functools import lru_cache
 
 try:
-    from cfe.df_utils import df_to_orgtbl  # type: ignore
-except ImportError:  # pragma: no cover - optional dependency
-    df_to_orgtbl = None  # type: ignore
-
-try:
     import dvc.api  # noqa: F401  # pragma: no cover
     from dvc.api import DVCFileSystem  # noqa: F401  # pragma: no cover
 except ImportError:  # pragma: no cover - optional dependency
     dvc = None  # noqa: F401
     DVCFileSystem = None  # type: ignore
 
+
+def df_to_orgtbl(
+    df,
+    tdf=None,
+    sedf=None,
+    conf_ints=None,
+    float_fmt="%5.3f",
+    bonus_stats=None,
+    math_delimiters=True,
+    print_heading=True,
+):
+    """
+    Return a string that renders *df* as an org-table.
+
+    Optional inputs include conf_ints, a pair (lowerdf, upperdf). If supplied,
+    confidence intervals will be printed in brackets below the point estimate.
+
+    If conf_ints is not supplied but sedf is, then standard errors will be
+    in parentheses below the point estimate.
+
+    If tdf is False and sedf is supplied then stars will decorate significant point estimates.
+    If tdf is a df of t-statistics stars will decorate significant point estimates.
+    """
+
+    def mypop(x, index=-1):
+        """Pop like a list, but pop of non-iterables returns x."""
+        if isinstance(x, str):
+            return x
+        try:
+            return x.pop(index)
+        except (IndexError, AttributeError):
+            return x
+
+    if isinstance(df, list):
+        if len(df) == 0:
+            return ""
+        col0 = df[0].columns
+
+        current = df_to_orgtbl(
+            mypop(df, 0),
+            mypop(tdf, 0),
+            mypop(sedf, 0),
+            conf_ints=mypop(conf_ints, 0),
+            float_fmt=mypop(float_fmt, 0),
+            bonus_stats=mypop(bonus_stats, 0),
+            math_delimiters=mypop(math_delimiters, 0),
+            print_heading=print_heading,
+        )
+
+        if len(df):
+            if np.all(df[0].columns == col0):
+                print_heading = False
+            else:
+                print_heading = True
+
+            return (
+                current
+                + "|-\n"
+                + df_to_orgtbl(
+                    df,
+                    tdf=tdf,
+                    sedf=sedf,
+                    conf_ints=conf_ints,
+                    float_fmt=float_fmt,
+                    bonus_stats=bonus_stats,
+                    math_delimiters=math_delimiters,
+                    print_heading=print_heading,
+                )
+            )
+        else:
+            return current
+
+    if len(df.shape) == 1:  # We have a series?
+        df = pd.DataFrame(df)
+
+    # Test for duplicates in index
+    if df.index.duplicated().sum() > 0:
+        warn("Dataframe index contains duplicates.")
+
+    # Test for duplicates in columns
+    if df.columns.duplicated().sum() > 0:
+        warn("Dataframe columns contain duplicates.")
+
+    try:  # Look for a multiindex
+        levels = len(df.index.levels)
+        names = ["" if v is None else v for v in df.index.names]
+    except AttributeError:  # Single index
+        levels = 1
+        names = [df.index.name if (df.index.name is not None) else ""]
+
+    def column_heading(df):
+        try:  # Look for multiindex columns
+            collevels = len(df.columns.levels)
+            colnames = ["" if v is None else v for v in df.columns.names]
+        except AttributeError:  # Single index
+            collevels = 1
+            colnames = [df.columns.name if (df.columns.name is not None) else ""]
+
+        if collevels == 1:
+            s = "| " + " | ".join(names) + " | " + "|   ".join([str(s) for s in df.columns]) + "  |\n|-\n"
+        else:
+            colhead = np.array(df.columns.tolist()).T
+            lastcol = [""] * collevels
+            for l, j in enumerate(colhead.T.copy()):
+                for k in range(collevels):
+                    if lastcol[k] == j[k]:
+                        colhead[k, l] = ""
+                lastcol = j
+
+            colhead = colhead.tolist()
+            s = ""
+            for k in range(collevels):
+                if k < collevels - 1:
+                    s += "| " * levels + " | "
+                else:
+                    s += "| " + " | ".join(names) + " | "
+                s += " | ".join(colhead[k]) + "  |\n"
+            s += "|-\n"
+
+        return s
+
+    def se_linestart(stats, i):
+        if stats is None:
+            return "|" * levels
+        else:
+            try:
+                statline = stats.loc[i]
+                assert levels >= len(statline), "Too many columns of bonus stats"
+                line = [""] * (levels - len(statline) + 1)
+                line += statline.tolist()
+                return " | ".join(line)
+            except (AttributeError, TypeError):  # stats a dict or series?
+                return " | " + str(stats[i])
+
+    def format_entry(x, stars="", se=False, float_fmt=float_fmt, math_delimiters=math_delimiters):
+        try:
+            fmt = float_fmt + stars
+            if se:
+                fmt = f"({fmt})"
+            if math_delimiters:
+                entry = "| \\(" + fmt + "\\) "
+            else:
+                entry = "| " + fmt + " "
+            if np.isnan(x):
+                return "| --- "
+            else:
+                return entry % x
+        except TypeError:
+            return "| %s " % str(x)
+
+    if print_heading:
+        s = column_heading(df)
+    else:
+        s = ""
+
+    if (tdf is None) and (sedf is None) and (conf_ints is None):
+        lastidx = [""] * levels
+        for i in df.index:
+            if levels == 1:  # Normal index
+                s += "| %s  " % i
+            else:
+                for k in range(levels):
+                    if lastidx[k] != i[k]:
+                        s += "| %s " % i[k]
+                    else:
+                        s += "| "
+            lastidx = i
+
+            for j in df.columns:  # Point estimates
+                s += format_entry(df[j][i])
+            s += "|\n"
+        return s
+    elif not (tdf is None) and (sedf is None) and (conf_ints is None):
+        lastidx = [""] * levels
+        for i in df.index:
+            if levels == 1:  # Normal index
+                s += "| %s  " % i
+            else:
+                for k in range(levels):
+                    if lastidx[k] != i[k]:
+                        s += "| %s " % i[k]
+                    else:
+                        s += "| "
+            lastidx = i
+
+            for j in df.columns:
+                try:
+                    stars = (np.abs(tdf[j][i]) > 1.65) + 0.0
+                    stars += (np.abs(tdf[j][i]) > 1.96) + 0.0
+                    stars += (np.abs(tdf[j][i]) > 2.577) + 0.0
+                    stars = int(stars)
+                    if stars > 0:
+                        stars = "^{" + "*" * stars + "}"
+                    else:
+                        stars = ""
+                except KeyError:
+                    stars = ""
+                s += format_entry(df[j][i], stars)
+
+            s += "|\n"
+
+        return s
+    elif not (sedf is None) and (conf_ints is None):  # Print standard errors on alternate rows
+        if tdf is not False:
+            try:  # Passed in dataframe?
+                tdf.shape
+            except AttributeError:
+                tdf = df[sedf.columns] / sedf
+
+        lastidx = [""] * levels
+        for i in df.index:
+            if levels == 1:  # Normal index
+                s += "| %s  " % i
+            else:
+                for k in range(levels):
+                    if lastidx[k] != i[k]:
+                        s += "| %s " % i[k]
+                    else:
+                        s += "| "
+            lastidx = i
+
+            for j in df.columns:  # Point estimates
+                if tdf is not False:
+                    try:
+                        stars = (np.abs(tdf[j][i]) > 1.65) + 0.0
+                        stars += (np.abs(tdf[j][i]) > 1.96) + 0.0
+                        stars += (np.abs(tdf[j][i]) > 2.577) + 0.0
+                        stars = int(stars)
+                        if stars > 0:
+                            stars = "^{" + "*" * stars + "}"
+                        else:
+                            stars = ""
+                    except KeyError:
+                        stars = ""
+                else:
+                    stars = ""
+                s += format_entry(df[j][i], stars)
+
+            s += "|\n" + se_linestart(bonus_stats, i)
+            for j in df.columns:  # Now standard errors
+                s += "  "
+                try:
+                    if np.isnan(df[j][i]):  # Pt estimate miss
+                        se = ""
+                    elif np.isnan(sedf[j][i]):
+                        se = "(---)"
+                    else:
+                        se = format_entry(sedf[j][i], se=True)
+                except KeyError:
+                    se = "|  "
+                s += se
+            s += "|\n"
+        return s
+    elif not (conf_ints is None):  # Print confidence intervals on alternate rows
+        if tdf is not False and sedf is not None:
+            try:  # Passed in dataframe?
+                tdf.shape
+            except AttributeError:
+                tdf = df[sedf.columns] / sedf
+        lastidx = [""] * levels
+        for i in df.index:
+            if levels == 1:  # Normal index
+                s += "| %s  " % i
+            else:
+                for k in range(levels):
+                    if lastidx[k] != i[k]:
+                        s += "| %s " % i[k]
+                    else:
+                        s += "| "
+            lastidx = i
+
+            for j in df.columns:  # Point estimates
+                if tdf is not False and tdf is not None:
+                    try:
+                        stars = (np.abs(tdf[j][i]) > 1.65) + 0.0
+                        stars += (np.abs(tdf[j][i]) > 1.96) + 0.0
+                        stars += (np.abs(tdf[j][i]) > 2.577) + 0.0
+                        stars = int(stars)
+                        if stars > 0:
+                            stars = "^{" + "*" * stars + "}"
+                        else:
+                            stars = ""
+                    except KeyError:
+                        stars = ""
+                else:
+                    stars = ""
+                s += format_entry(df[j][i], stars)
+            s += "|\n" + se_linestart(bonus_stats, i)
+
+            for j in df.columns:  # Now confidence intervals
+                s += "  "
+                try:
+                    ci = "[" + float_fmt + "," + float_fmt + "]"
+                    ci = ci % (conf_ints[0][j][i], conf_ints[1][j][i])
+                except KeyError:
+                    ci = ""
+                entry = "| " + ci + "  "
+                s += entry
+            s += "|\n"
+        return s
 
 def _coerce_label(value, encoding):
     """Return `value` recoded to UTF-8 using the supplied encoding."""

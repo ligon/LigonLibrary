@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from .dataframes import from_dta  # noqa: F401
+from .dataframes import df_to_orgtbl, from_dta  # noqa: F401
 from .sheets import (  # noqa: F401
     delete_sheet,
     get_credentials,
@@ -20,6 +20,7 @@ except PackageNotFoundError:  # pragma: no cover
 
 __all__ = [
     "delete_sheet",
+    "df_to_orgtbl",
     "from_dta",
     "get_credentials",
     "read_public_sheet",

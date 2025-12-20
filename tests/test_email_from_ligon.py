@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from googleapiclient.errors import HttpError
 
 from ligonlibrary.email_from_ligon import (
     ENV_EMAIL_CREDENTIALS,

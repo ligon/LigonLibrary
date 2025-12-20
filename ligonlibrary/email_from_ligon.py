@@ -7,7 +7,7 @@ from email.utils import parseaddr
 from html.parser import HTMLParser
 from pathlib import Path
 import time
-from typing import Iterable, NamedTuple, Optional
+from typing import Iterable, NamedTuple
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
