@@ -5,13 +5,17 @@ from ligonlibrary.dataframes import df_to_orgtbl, orgtbl_to_df
 
 
 def test_df_to_orgtbl_basic_plain():
-    df = pd.DataFrame({"A": [1, 2], "B": [3, 4]}, index=["row1", "row2"])
+    df = pd.DataFrame({"A": [1.0, 2.0], "B": [3.0, 4.0]}, index=["row1", "row2"])
 
-    out = df_to_orgtbl(df, float_fmt="%.0f", math_delimiters=False)
+    out = df_to_orgtbl(df, float_fmt="%.1f", math_delimiters=False)
 
-    assert "| A | B" in out
-    assert "| row1  | 1 " in out
-    assert "| row2  | 2 " in out
+    expected = (
+        "|  | A|   B  |\n"
+        "|-\n"
+        "| row1  | 1.0 | 3.0 |\n"
+        "| row2  | 2.0 | 4.0 |\n"
+    )
+    assert out == expected
 
 
 def test_df_to_orgtbl_with_standard_errors():
@@ -66,3 +70,31 @@ def test_df_to_orgtbl_missing_values_render_as_dashes():
 
     # Expect three missing slots rendered as ---
     assert out.count("---") >= 3
+
+
+def test_df_to_orgtbl_with_stars_from_tstats():
+    df = pd.DataFrame({"beta": [2.0]}, index=["x"])
+    tdf = pd.DataFrame({"beta": [2.0]}, index=df.index)  # two stars (>1.96)
+    sedf = pd.DataFrame({"beta": [0.5]}, index=df.index)
+
+    out = df_to_orgtbl(df, sedf=sedf, tdf=tdf, float_fmt="%.2f", math_delimiters=False)
+
+    assert "2.00^{**}" in out
+    assert "(0.50)" in out
+
+
+def test_df_to_orgtbl_conf_intervals():
+    df = pd.DataFrame({"beta": [1.0]}, index=["x"])
+    lower = pd.DataFrame({"beta": [0.8]}, index=df.index)
+    upper = pd.DataFrame({"beta": [1.2]}, index=df.index)
+
+    out = df_to_orgtbl(
+        df,
+        conf_ints=(lower, upper),
+        tdf=False,
+        float_fmt="%.2f",
+        math_delimiters=False,
+    )
+
+    assert "[0.80,0.80]" not in out  # ensure not duplicated
+    assert "[0.80,1.20]" in out
