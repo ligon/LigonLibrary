@@ -47,6 +47,7 @@ def df_to_orgtbl(
     If tdf is False and sedf is supplied then stars will decorate significant point estimates.
     If tdf is a df of t-statistics stars will decorate significant point estimates.
     """
+
     def is_missing(x):
         try:
             return pd.isna(x)
@@ -149,54 +150,6 @@ def df_to_orgtbl(
             s += "|-\n"
 
         return s
-    # if conf_ints is None: fall through implicitly
-    return s  # pragma: no cover
-
-
-def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=None):
-    """
-    Convert an org-table (list of lists) into a pandas DataFrame.
-
-    Requires the use of the header `:colnames no` for preservation of original column names.
-
-    Parameters
-    ----------
-    table : list[list]
-        Parsed org table rows.
-    col_name_size : int
-        Number of rows that make up the column names.
-    format_string : str, optional
-        Format string applied to column names.
-    index : str | list[str], optional
-        Column(s) to set as the index.
-    dtype : type, optional
-        Optional dtype for the DataFrame.
-    """
-    if col_name_size == 0:
-        return pd.DataFrame(table, dtype=dtype)
-
-    colnames = table[:col_name_size]
-
-    if col_name_size == 1:
-        if format_string:
-            new_colnames = [format_string % x for x in colnames[0]]
-        else:
-            new_colnames = colnames[0]
-    else:
-        new_colnames = []
-        for colnum in range(len(colnames[0])):
-            curr_tuple = tuple([x[colnum] for x in colnames])
-            if format_string:
-                new_colnames.append(format_string % curr_tuple)
-            else:
-                new_colnames.append(str(curr_tuple))
-
-    df = pd.DataFrame(table[col_name_size:], columns=new_colnames, dtype=dtype)
-
-    if index:
-        df.set_index(index, inplace=True)
-
-    return df
 
     def se_linestart(stats, i):
         if stats is None:
@@ -383,6 +336,52 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
             s += "|\n"
         return s
 
+
+
+def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=None):
+    """
+    Convert an org-table (list of lists) into a pandas DataFrame.
+
+    Requires the use of the header `:colnames no` for preservation of original column names.
+
+    Parameters
+    ----------
+    table : list[list]
+        Parsed org table rows.
+    col_name_size : int
+        Number of rows that make up the column names.
+    format_string : str, optional
+        Format string applied to column names.
+    index : str | list[str], optional
+        Column(s) to set as the index.
+    dtype : type, optional
+        Optional dtype for the DataFrame.
+    """
+    if col_name_size == 0:
+        return pd.DataFrame(table, dtype=dtype)
+
+    colnames = table[:col_name_size]
+
+    if col_name_size == 1:
+        if format_string:
+            new_colnames = [format_string % x for x in colnames[0]]
+        else:
+            new_colnames = colnames[0]
+    else:
+        new_colnames = []
+        for colnum in range(len(colnames[0])):
+            curr_tuple = tuple([x[colnum] for x in colnames])
+            if format_string:
+                new_colnames.append(format_string % curr_tuple)
+            else:
+                new_colnames.append(str(curr_tuple))
+
+    df = pd.DataFrame(table[col_name_size:], columns=new_colnames, dtype=dtype)
+
+    if index:
+        df.set_index(index, inplace=True)
+
+    return df
 def _coerce_label(value, encoding):
     """Return `value` recoded to UTF-8 using the supplied encoding."""
     if encoding is None or value is None:
