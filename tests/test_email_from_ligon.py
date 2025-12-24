@@ -74,6 +74,7 @@ def test_send_with_retry_backoff(monkeypatch):
 
     class FakeResp:
         status = 429
+        reason = "Too Many Requests"
 
     class FakeSend:
         def __init__(self):
@@ -87,6 +88,8 @@ def test_send_with_retry_backoff(monkeypatch):
             return {"id": "ok"}
 
     class FakeService:
+        _sender = FakeSend()
+
         def users(self):
             return self
 
@@ -95,7 +98,7 @@ def test_send_with_retry_backoff(monkeypatch):
 
         def send(self, userId, body):
             calls.append((userId, body))
-            return FakeSend()
+            return self._sender
 
     # Make time.sleep a no-op to keep test fast
     monkeypatch.setattr("time.sleep", lambda *_: None)
