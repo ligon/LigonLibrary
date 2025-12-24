@@ -468,12 +468,12 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         if isinstance(f,str):
             try:
                 return pd.read_spss(f,convert_categoricals=convert_categoricals)
-            except (pd.errors.ParserError, UnicodeDecodeError):
+            except (pd.errors.ParserError, UnicodeDecodeError, ValueError, ImportError):
                 pass
 
         try:
             return pd.read_parquet(f, engine='pyarrow')
-        except (ArrowInvalid,):
+        except (ArrowInvalid, ImportError):
             pass
 
         try:
@@ -497,7 +497,7 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         try:
             f.seek(0)
             return pd.read_feather(f)
-        except (pd.errors.ParserError, UnicodeDecodeError,ArrowInvalid) as e:
+        except (pd.errors.ParserError, UnicodeDecodeError, ArrowInvalid, ImportError):
             pass
 
         try:
