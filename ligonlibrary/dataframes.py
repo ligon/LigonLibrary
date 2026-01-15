@@ -506,7 +506,7 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
     Hope is that caller can be agnostic about file type.
     """
 
-    def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
+    def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet,path_hint=None):
         stream = f
         if not isinstance(stream, (str, Path)):
             if (not hasattr(stream, "seek")) or (hasattr(stream, "seekable") and not stream.seekable()):
@@ -514,7 +514,13 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
             else:
                 stream.seek(0)
 
-        path_hint = stream if isinstance(stream, (str, Path)) else None
+        if path_hint is None:
+            if isinstance(stream, (str, Path)):
+                path_hint = stream
+            else:
+                name = getattr(stream, "name", None)
+                if name:
+                    path_hint = name
 
         def peek_header():
             try:
@@ -554,7 +560,7 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         if isinstance(stream,(str, Path)):
             try:
                 return pd.read_spss(stream,convert_categoricals=convert_categoricals)
-            except (pd.errors.ParserError, UnicodeDecodeError, ValueError, ImportError):
+            except Exception:
                 pass
 
         try:
@@ -597,9 +603,9 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
 
     try:
         with open(fn,mode='rb') as f:
-            df = read_file(f,convert_categoricals=convert_categoricals,encoding=encoding)
+            df = read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,path_hint=fn)
     except (TypeError,ValueError): # Needs filename?
-        df = read_file(fn,convert_categoricals=convert_categoricals,encoding=encoding)
+        df = read_file(fn,convert_categoricals=convert_categoricals,encoding=encoding,path_hint=fn)
 
     return df
 
