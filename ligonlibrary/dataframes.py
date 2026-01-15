@@ -478,25 +478,35 @@ def _looks_like_pgp(header: bytes, path_hint=None) -> bool:
 
 def _decrypt_with_gpg(stream, path_hint=None):
     """Attempt to decrypt the supplied stream/path with gpg, returning (BytesIO, stderr) on success/failure."""
-    cmd = ["gpg", "--batch", "--yes", "--quiet", "--pinentry-mode", "loopback", "--decrypt"]
-    try:
-        if isinstance(stream, (str, Path)):
-            completed = subprocess.run(cmd + [str(stream)], capture_output=True, check=False, timeout=15)
-        else:
-            payload = stream.read()
-            completed = subprocess.run(cmd, input=payload, capture_output=True, check=False, timeout=15)
-        if completed.returncode != 0 or not completed.stdout:
-            if not isinstance(stream, (str, Path)) and hasattr(stream, "seek"):
-                try:
-                    stream.seek(0)
-                except Exception:
-                    pass
-            return None, completed.stderr.decode(errors="ignore")
-        return BytesIO(completed.stdout), None
-    except FileNotFoundError:  # gpg missing
-        return None, "gpg not installed"
-    except subprocess.TimeoutExpired:
-        return None, "gpg decrypt timed out"
+    use_path = isinstance(stream, (str, Path))
+    payload = None if use_path else stream.read()
+
+    def attempt(cmd, timeout):
+        if use_path:
+            return subprocess.run(cmd + [str(stream)], capture_output=True, check=False, timeout=timeout)
+        return subprocess.run(cmd, input=payload, capture_output=True, check=False, timeout=timeout)
+
+    cmds = [
+        (["gpg", "--batch", "--yes", "--quiet", "--pinentry-mode", "loopback", "--decrypt"], 15),
+        (["gpg", "--yes", "--decrypt"], 60),
+    ]
+    errors = []
+
+    for cmd, timeout in cmds:
+        try:
+            completed = attempt(cmd, timeout=timeout)
+        except FileNotFoundError:
+            return None, "gpg not installed"
+        except subprocess.TimeoutExpired:
+            errors.append(f"{cmd[0]} decrypt timed out")
+            continue
+
+        if completed.returncode == 0 and completed.stdout:
+            return BytesIO(completed.stdout), None
+
+        errors.append(completed.stderr.decode(errors="ignore"))
+
+    return None, "; ".join(filter(None, errors))
 
 
 @lru_cache(maxsize=3)
