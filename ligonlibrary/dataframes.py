@@ -5,10 +5,16 @@ import struct
 import warnings
 from warnings import warn
 from io import BytesIO
+import subprocess
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+try:
+    import magic  # type: ignore
+except ImportError:  # pragma: no cover - optional dependency
+    magic = None
 try:
     from pyarrow.lib import ArrowInvalid
 except ImportError:  # pragma: no cover - optional dependency
@@ -440,6 +446,59 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
 
     return df
 
+
+def _looks_like_pgp(header: bytes, path_hint=None) -> bool:
+    """Heuristically determine if the content looks like PGP-encrypted data."""
+    if path_hint:
+        suffix = str(path_hint).lower()
+        if suffix.endswith((".gpg", ".pgp", ".asc")):
+            return True
+
+    stripped = header.lstrip()
+    if stripped.startswith(b"-----BEGIN PGP MESSAGE-----"):
+        return True
+
+    if magic is not None:
+        try:
+            mime = magic.from_buffer(header, mime=True)
+        except Exception:
+            mime = None
+        try:
+            desc = magic.from_buffer(header)
+        except Exception:
+            desc = None
+
+        for candidate in (mime, desc):
+            if candidate and "pgp" in str(candidate).lower():
+                return True
+
+    # Fallback heuristic for binary packets: look for "PGP" marker in the first bytes.
+    return b"PGP" in header[:32]
+
+
+def _decrypt_with_gpg(stream, path_hint=None):
+    """Attempt to decrypt the supplied stream/path with gpg, returning BytesIO on success."""
+    cmd = ["gpg", "--batch", "--yes", "--quiet", "--pinentry-mode", "loopback", "--decrypt"]
+    try:
+        if isinstance(stream, (str, Path)):
+            completed = subprocess.run(cmd + [str(stream)], capture_output=True, check=False, timeout=15)
+        else:
+            payload = stream.read()
+            completed = subprocess.run(cmd, input=payload, capture_output=True, check=False, timeout=15)
+        if completed.returncode != 0 or not completed.stdout:
+            if not isinstance(stream, (str, Path)) and hasattr(stream, "seek"):
+                try:
+                    stream.seek(0)
+                except Exception:
+                    pass
+            return None
+        return BytesIO(completed.stdout)
+    except FileNotFoundError:  # gpg missing
+        return None
+    except subprocess.TimeoutExpired:
+        return None
+
+
 @lru_cache(maxsize=3)
 def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False,sheet=None):
     """From a file named fn, try to return a dataframe.
@@ -449,17 +508,50 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
 
     def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
         stream = f
-        if not isinstance(stream, str):
+        if not isinstance(stream, (str, Path)):
             if (not hasattr(stream, "seek")) or (hasattr(stream, "seekable") and not stream.seekable()):
                 stream = BytesIO(stream.read())
             else:
                 stream.seek(0)
 
+        path_hint = stream if isinstance(stream, (str, Path)) else None
+
+        def peek_header():
+            try:
+                if isinstance(stream, (str, Path)):
+                    with open(stream, "rb") as handle:
+                        return handle.read(1024)
+                pos = None
+                if hasattr(stream, "tell"):
+                    try:
+                        pos = stream.tell()
+                    except Exception:
+                        pos = None
+                data = stream.read(1024)
+                if pos is not None and hasattr(stream, "seek"):
+                    stream.seek(pos)
+                elif hasattr(stream, "seek"):
+                    stream.seek(0)
+                return data
+            except OSError:
+                return b""
+
+        header = peek_header()
+        if header and _looks_like_pgp(header, path_hint=path_hint):
+            decrypted = _decrypt_with_gpg(stream, path_hint=path_hint)
+            if decrypted is not None:
+                stream = decrypted
+            elif not isinstance(stream, (str, Path)) and hasattr(stream, "seek"):
+                try:
+                    stream.seek(0)
+                except Exception:
+                    pass
+
         def reset():
             if hasattr(stream, "seek"):
                 stream.seek(0)
 
-        if isinstance(stream,str):
+        if isinstance(stream,(str, Path)):
             try:
                 return pd.read_spss(stream,convert_categoricals=convert_categoricals)
             except (pd.errors.ParserError, UnicodeDecodeError, ValueError, ImportError):

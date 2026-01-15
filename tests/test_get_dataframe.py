@@ -1,5 +1,10 @@
 import io
+import os
+import shutil
+import subprocess
+
 import pandas as pd
+import pytest
 
 from ligonlibrary.dataframes import get_dataframe
 
@@ -107,3 +112,67 @@ def test_non_seekable_stream_is_buffered(monkeypatch):
 
     assert list(df.columns) == ["col"]
     assert df.iloc[0, 0] == 3
+
+
+def test_get_dataframe_decrypts_pgp_file(tmp_path, monkeypatch):
+    gpg = shutil.which("gpg")
+    if gpg is None:
+        pytest.skip("gpg not installed")
+
+    gnupg_home = tmp_path / "gnupg"
+    gnupg_home.mkdir()
+    env = os.environ.copy()
+    env["GNUPGHOME"] = str(gnupg_home)
+
+    # Create a key without a passphrase for non-interactive decrypt.
+    subprocess.run(
+        [
+            gpg,
+            "--batch",
+            "--yes",
+            "--homedir",
+            str(gnupg_home),
+            "--pinentry-mode",
+            "loopback",
+            "--passphrase",
+            "",
+            "--quick-gen-key",
+            "test@example.com",
+            "default",
+            "default",
+            "0",
+        ],
+        check=True,
+        env=env,
+    )
+
+    plaintext = tmp_path / "data.csv"
+    plaintext.write_text("col\n4\n", encoding="utf-8")
+    ciphertext = tmp_path / "data.csv.gpg"
+
+    subprocess.run(
+        [
+            gpg,
+            "--batch",
+            "--yes",
+            "--homedir",
+            str(gnupg_home),
+            "--trust-model",
+            "always",
+            "--recipient",
+            "test@example.com",
+            "--output",
+            str(ciphertext),
+            "--encrypt",
+            str(plaintext),
+        ],
+        check=True,
+        env=env,
+    )
+
+    monkeypatch.setenv("GNUPGHOME", str(gnupg_home))
+    get_dataframe.cache_clear()
+    df = get_dataframe(ciphertext)
+
+    assert list(df.columns) == ["col"]
+    assert df.iloc[0, 0] == 4
