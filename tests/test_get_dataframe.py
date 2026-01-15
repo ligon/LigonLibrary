@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 
 from ligonlibrary.dataframes import get_dataframe
@@ -80,3 +81,29 @@ def test_sheet_name_is_passed_to_read_excel_for_buffer(tmp_path, monkeypatch):
     assert called["sheet_name"] == "sheety"
     assert list(df.columns) == ["ok"]
     assert df.iloc[0, 0] == 2
+
+
+def test_non_seekable_stream_is_buffered(monkeypatch):
+    csv_bytes = b"col\n3\n"
+
+    class NonSeekable(io.BytesIO):
+        def seekable(self):
+            return False
+
+        def seek(self, *_, **__):
+            raise OSError("no seek")
+
+    buffer = NonSeekable(csv_bytes)
+
+    # Force fallthrough to CSV reader.
+    monkeypatch.setattr(pd, "read_parquet", lambda *_, **__: (_ for _ in ()).throw(ImportError("no pyarrow")))
+    monkeypatch.setattr("ligonlibrary.dataframes.from_dta", lambda *_, **__: (_ for _ in ()).throw(ValueError("no dta")))
+    monkeypatch.setattr(pd, "read_excel", lambda *_, **__: (_ for _ in ()).throw(ValueError("no excel")))
+    monkeypatch.setattr(pd, "read_feather", lambda *_, **__: (_ for _ in ()).throw(ImportError("no feather")))
+    monkeypatch.setattr(pd, "read_fwf", lambda *_, **__: (_ for _ in ()).throw(pd.errors.ParserError("bad fwf")))
+
+    get_dataframe.cache_clear()
+    df = get_dataframe(buffer)
+
+    assert list(df.columns) == ["col"]
+    assert df.iloc[0, 0] == 3

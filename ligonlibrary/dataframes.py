@@ -4,6 +4,7 @@
 import struct
 import warnings
 from warnings import warn
+from io import BytesIO
 
 import numpy as np
 import pandas as pd
@@ -447,44 +448,55 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
     """
 
     def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
-        if isinstance(f,str):
+        stream = f
+        if not isinstance(stream, str):
+            if (not hasattr(stream, "seek")) or (hasattr(stream, "seekable") and not stream.seekable()):
+                stream = BytesIO(stream.read())
+            else:
+                stream.seek(0)
+
+        def reset():
+            if hasattr(stream, "seek"):
+                stream.seek(0)
+
+        if isinstance(stream,str):
             try:
-                return pd.read_spss(f,convert_categoricals=convert_categoricals)
+                return pd.read_spss(stream,convert_categoricals=convert_categoricals)
             except (pd.errors.ParserError, UnicodeDecodeError, ValueError, ImportError):
                 pass
 
         try:
-            return pd.read_parquet(f, engine='pyarrow')
+            return pd.read_parquet(stream, engine='pyarrow')
         except (ArrowInvalid, ImportError):
             pass
 
         try:
-            f.seek(0)
-            return from_dta(f,convert_categoricals=convert_categoricals,encoding=encoding,categories_only=categories_only)
+            reset()
+            return from_dta(stream,convert_categoricals=convert_categoricals,encoding=encoding,categories_only=categories_only)
         except ValueError:
             pass
 
         try:
-            f.seek(0)
-            return pd.read_csv(f,encoding=encoding)
+            reset()
+            return pd.read_csv(stream,encoding=encoding)
         except (pd.errors.ParserError, UnicodeDecodeError):
             pass
 
         try:
-            f.seek(0)
-            return pd.read_excel(f,sheet_name=sheet)
+            reset()
+            return pd.read_excel(stream,sheet_name=sheet)
         except (pd.errors.ParserError, UnicodeDecodeError, ValueError):
             pass
 
         try:
-            f.seek(0)
-            return pd.read_feather(f)
+            reset()
+            return pd.read_feather(stream)
         except (pd.errors.ParserError, UnicodeDecodeError, ArrowInvalid, ImportError):
             pass
 
         try:
-            f.seek(0)
-            return pd.read_fwf(f)
+            reset()
+            return pd.read_fwf(stream)
         except (pd.errors.ParserError, UnicodeDecodeError):
             pass
 
