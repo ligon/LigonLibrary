@@ -17,14 +17,6 @@ except ImportError:  # pragma: no cover - optional dependency
         pass
 from functools import lru_cache
 
-try:
-    import dvc.api  # noqa: F401  # pragma: no cover
-    from dvc.api import DVCFileSystem  # noqa: F401  # pragma: no cover
-except ImportError:  # pragma: no cover - optional dependency
-    dvc = None  # noqa: F401
-    DVCFileSystem = None  # type: ignore
-
-
 def df_to_orgtbl(
     df,
     tdf=None,
@@ -451,18 +443,8 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
 def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False,sheet=None):
     """From a file named fn, try to return a dataframe.
 
-    Hope is that caller can be agnostic about file type,
-    or if file is local or on a dvc remote.
+    Hope is that caller can be agnostic about file type.
     """
-
-    def local_file(fn):
-    # Is the file local?
-        try:
-            with open(fn) as f:
-                pass
-            return True
-        except FileNotFoundError:
-            return False
 
     def read_file(f,convert_categoricals=convert_categoricals,encoding=encoding,sheet=sheet):
         if isinstance(f,str):
