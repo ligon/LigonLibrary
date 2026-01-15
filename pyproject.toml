@@ -19,6 +19,7 @@ google-api-python-client = "^2.178.0"
 gspread = "^5.12.0"
 gspread-pandas = "^3.3.0"
 python-gnupg = "^0.5.2"
+python-magic = "^0.4.27"
 openpyxl = "^3.1.5"
 
 [tool.poetry.group.dev.dependencies]
