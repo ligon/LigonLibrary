@@ -509,6 +509,65 @@ def _decrypt_with_gpg(stream, path_hint=None):
     return None, "; ".join(filter(None, errors))
 
 
+def _format_hints(header: bytes, path_hint=None):
+    """Return ordered format hints like ['csv', 'excel', ...] based on magic and suffix."""
+    hints = []
+
+    def add(hint):
+        if hint and hint not in hints:
+            hints.append(hint)
+
+    mime = desc = None
+    if magic is not None:
+        try:
+            mime = magic.from_buffer(header, mime=True)
+        except Exception:
+            mime = None
+        try:
+            desc = magic.from_buffer(header)
+        except Exception:
+            desc = None
+
+    def match(val):
+        if not val:
+            return
+        val = val.lower()
+        if "parquet" in val:
+            add("parquet")
+        if "feather" in val or "arrow" in val:
+            add("feather")
+        if "excel" in val or "spreadsheet" in val:
+            add("excel")
+        if "csv" in val:
+            add("csv")
+        if "stata" in val or "dta" in val:
+            add("dta")
+        if "spss" in val or "sav" in val:
+            add("spss")
+        if "fixed" in val and "column" in val:
+            add("fwf")
+
+    match(mime)
+    match(desc)
+
+    if path_hint:
+        suffix = Path(str(path_hint)).suffix.lower()
+        ext_map = {
+            ".csv": "csv",
+            ".tsv": "csv",
+            ".xlsx": "excel",
+            ".xls": "excel",
+            ".parquet": "parquet",
+            ".feather": "feather",
+            ".sav": "spss",
+            ".dta": "dta",
+            ".fwf": "fwf",
+        }
+        add(ext_map.get(suffix))
+
+    return hints
+
+
 @lru_cache(maxsize=3)
 def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=False,sheet=None):
     """From a file named fn, try to return a dataframe.
@@ -565,50 +624,36 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
                 except Exception:
                     pass
 
+        format_hints = _format_hints(header or b"", path_hint=path_hint)
+
         def reset():
             if hasattr(stream, "seek"):
                 stream.seek(0)
 
-        if isinstance(stream,(str, Path)):
+        readers = {
+            "spss": lambda: pd.read_spss(stream,convert_categoricals=convert_categoricals),
+            "parquet": lambda: pd.read_parquet(stream, engine='pyarrow'),
+            "dta": lambda: from_dta(stream,convert_categoricals=convert_categoricals,encoding=encoding,categories_only=categories_only),
+            "csv": lambda: pd.read_csv(stream,encoding=encoding),
+            "excel": lambda: pd.read_excel(stream,sheet_name=sheet),
+            "feather": lambda: pd.read_feather(stream),
+            "fwf": lambda: pd.read_fwf(stream),
+        }
+
+        order = []
+        for hint in format_hints:
+            if hint in readers and hint not in order:
+                order.append(hint)
+        for fallback in ["spss","parquet","dta","csv","excel","feather","fwf"]:
+            if fallback not in order:
+                order.append(fallback)
+
+        for name in order:
             try:
-                return pd.read_spss(stream,convert_categoricals=convert_categoricals)
+                reset()
+                return readers[name]()
             except Exception:
-                pass
-
-        try:
-            return pd.read_parquet(stream, engine='pyarrow')
-        except (ArrowInvalid, ImportError):
-            pass
-
-        try:
-            reset()
-            return from_dta(stream,convert_categoricals=convert_categoricals,encoding=encoding,categories_only=categories_only)
-        except ValueError:
-            pass
-
-        try:
-            reset()
-            return pd.read_csv(stream,encoding=encoding)
-        except (pd.errors.ParserError, UnicodeDecodeError):
-            pass
-
-        try:
-            reset()
-            return pd.read_excel(stream,sheet_name=sheet)
-        except (pd.errors.ParserError, UnicodeDecodeError, ValueError):
-            pass
-
-        try:
-            reset()
-            return pd.read_feather(stream)
-        except (pd.errors.ParserError, UnicodeDecodeError, ArrowInvalid, ImportError):
-            pass
-
-        try:
-            reset()
-            return pd.read_fwf(stream)
-        except (pd.errors.ParserError, UnicodeDecodeError):
-            pass
+                continue
 
         if pgp_detected:
             raise ValueError(f"Failed to decrypt PGP file {path_hint}: {err}")

@@ -5,6 +5,10 @@ import subprocess
 
 import pandas as pd
 import pytest
+try:
+    import magic
+except ImportError:  # pragma: no cover - optional dependency
+    magic = None
 
 from ligonlibrary.dataframes import get_dataframe
 
@@ -176,3 +180,32 @@ def test_get_dataframe_decrypts_pgp_file(tmp_path, monkeypatch):
 
     assert list(df.columns) == ["col"]
     assert df.iloc[0, 0] == 4
+
+
+def test_magic_prioritizes_excel_over_csv(tmp_path, monkeypatch):
+    if magic is None:
+        pytest.skip("python-magic not installed")
+    excel_file = tmp_path / "sample.xlsx"
+    pd.DataFrame({"col": [5]}).to_excel(excel_file, index=False, sheet_name="sheety")
+
+    monkeypatch.setattr(magic, "from_buffer", lambda *_, **__: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    calls = []
+
+    def fake_read_excel(path, sheet_name=None, **kwargs):
+        calls.append(("excel", sheet_name))
+        return pd.DataFrame({"col": [5]})
+
+    def fail_csv(*args, **kwargs):
+        calls.append(("csv", None))
+        raise AssertionError("read_csv should not be called when magic says excel")
+
+    monkeypatch.setattr(pd, "read_excel", fake_read_excel)
+    monkeypatch.setattr(pd, "read_csv", fail_csv)
+
+    get_dataframe.cache_clear()
+    df = get_dataframe(excel_file, sheet="sheety")
+
+    assert calls[0] == ("excel", "sheety")
+    assert list(df.columns) == ["col"]
+    assert df.iloc[0, 0] == 5
