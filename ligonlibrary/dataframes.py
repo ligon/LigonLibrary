@@ -477,7 +477,7 @@ def _looks_like_pgp(header: bytes, path_hint=None) -> bool:
 
 
 def _decrypt_with_gpg(stream, path_hint=None):
-    """Attempt to decrypt the supplied stream/path with gpg, returning BytesIO on success."""
+    """Attempt to decrypt the supplied stream/path with gpg, returning (BytesIO, stderr) on success/failure."""
     cmd = ["gpg", "--batch", "--yes", "--quiet", "--pinentry-mode", "loopback", "--decrypt"]
     try:
         if isinstance(stream, (str, Path)):
@@ -491,12 +491,12 @@ def _decrypt_with_gpg(stream, path_hint=None):
                     stream.seek(0)
                 except Exception:
                     pass
-            return None
-        return BytesIO(completed.stdout)
+            return None, completed.stderr.decode(errors="ignore")
+        return BytesIO(completed.stdout), None
     except FileNotFoundError:  # gpg missing
-        return None
+        return None, "gpg not installed"
     except subprocess.TimeoutExpired:
-        return None
+        return None, "gpg decrypt timed out"
 
 
 @lru_cache(maxsize=3)
@@ -543,8 +543,10 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
                 return b""
 
         header = peek_header()
+        pgp_detected = False
         if header and _looks_like_pgp(header, path_hint=path_hint):
-            decrypted = _decrypt_with_gpg(stream, path_hint=path_hint)
+            pgp_detected = True
+            decrypted, err = _decrypt_with_gpg(stream, path_hint=path_hint)
             if decrypted is not None:
                 stream = decrypted
             elif not isinstance(stream, (str, Path)) and hasattr(stream, "seek"):
@@ -598,7 +600,8 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
         except (pd.errors.ParserError, UnicodeDecodeError):
             pass
 
-
+        if pgp_detected:
+            raise ValueError(f"Failed to decrypt PGP file {path_hint}: {err}")
         raise ValueError(f"Unknown file type for {fn}.")
 
     try:
