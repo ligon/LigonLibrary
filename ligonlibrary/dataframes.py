@@ -509,55 +509,23 @@ def _decrypt_with_gpg(stream, path_hint=None):
     return None, "; ".join(filter(None, errors))
 
 
-def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=None):
-    """Read an org-mode table from a ``.org`` file and return a DataFrame.
-
-    Parameters
-    ----------
-    fn : str | Path | file-like
-        Path to the ``.org`` file, or an open text-mode file handle.
-    name : str, optional
-        The ``#+name:`` label of the target table.  If ``None``, the first
-        table in the file is used.
-    set_columns : bool
-        When ``True`` (default), treat the first row of the table as column
-        headers.
-    to_numeric : bool
-        When ``True`` (default), attempt to convert columns to numeric types.
-    encoding : str, optional
-        File encoding (passed to ``open()``).
-
-    Returns
-    -------
-    pandas.DataFrame
-    """
-    # Read file contents
+def _read_org_contents(fn, encoding=None):
+    """Read an org file into a list of lines."""
     if hasattr(fn, 'read'):
         contents = fn.readlines()
         if contents and isinstance(contents[0], bytes):
             contents = [line.decode(encoding or 'utf-8') for line in contents]
-    else:
-        with open(fn, 'r', encoding=encoding) as f:
-            contents = f.readlines()
+        return contents
+    with open(fn, 'r', encoding=encoding) as f:
+        return f.readlines()
 
-    # Locate the target table
-    if name is not None:
-        target = f'#+name: {name}'.lower()
-        name_lines = [
-            i for i, s in enumerate(contents) if s.strip().lower() == target
-        ]
-        if not name_lines:
-            warnings.warn(f'No table named {name!r} found.')
-            return pd.DataFrame()
-        if len(name_lines) > 1:
-            warnings.warn(
-                f'Multiple tables named {name!r}; reading the first one '
-                f'(line {name_lines[0] + 1}).'
-            )
-        start = name_lines[0]
-    else:
-        start = 0
 
+def _parse_org_table(contents, start=0, set_columns=True, to_numeric=True):
+    """Parse a single org table starting at line *start*.
+
+    Returns ``(df, end_line)`` where *end_line* is the first line after the
+    table (useful for scanning multiple tables).
+    """
     # Advance past #+option lines and blank lines to the first table row
     i = start
     while i < len(contents):
@@ -567,7 +535,6 @@ def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=N
         else:
             break
 
-    # Parse the table
     columns = None
     rows: list[list[str]] = []
 
@@ -595,6 +562,79 @@ def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=N
             except (ValueError, TypeError):
                 pass
 
+    return df, i
+
+
+def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=None):
+    """Read org-mode table(s) from a ``.org`` file.
+
+    Parameters
+    ----------
+    fn : str | Path | file-like
+        Path to the ``.org`` file, or an open text-mode file handle.
+    name : str, optional
+        The ``#+name:`` label of the target table.  If ``None`` **and** the
+        file contains multiple named tables, a ``dict`` of DataFrames keyed
+        by table name is returned (mirroring the multi-sheet Excel
+        convention).  If only one table is present, a single DataFrame is
+        returned.
+    set_columns : bool
+        When ``True`` (default), treat the first row of each table as column
+        headers.
+    to_numeric : bool
+        When ``True`` (default), attempt to convert columns to numeric types.
+    encoding : str, optional
+        File encoding (passed to ``open()``).
+
+    Returns
+    -------
+    pandas.DataFrame or dict[str, pandas.DataFrame]
+        A single DataFrame when *name* is given or the file contains at most
+        one table.  A ``{name: DataFrame}`` dict when the file contains
+        multiple named tables and *name* is ``None``.
+    """
+    contents = _read_org_contents(fn, encoding=encoding)
+
+    # --- Specific table requested ---
+    if name is not None:
+        target = f'#+name: {name}'.lower()
+        name_lines = [
+            i for i, s in enumerate(contents) if s.strip().lower() == target
+        ]
+        if not name_lines:
+            warnings.warn(f'No table named {name!r} found.')
+            return pd.DataFrame()
+        if len(name_lines) > 1:
+            warnings.warn(
+                f'Multiple tables named {name!r}; reading the first one '
+                f'(line {name_lines[0] + 1}).'
+            )
+        df, _ = _parse_org_table(contents, start=name_lines[0],
+                                 set_columns=set_columns, to_numeric=to_numeric)
+        return df
+
+    # --- No name given: scan for all named tables ---
+    named_tables: dict[str, int] = {}
+    for i, line in enumerate(contents):
+        stripped = line.strip().lower()
+        if stripped.startswith('#+name:'):
+            tbl_name = line.strip().split(':', 1)[1].strip()
+            if tbl_name:
+                named_tables[tbl_name] = i
+
+    if len(named_tables) > 1:
+        # Multiple named tables -> return dict (like multi-sheet Excel)
+        result = {}
+        for tbl_name, start_line in named_tables.items():
+            df, _ = _parse_org_table(contents, start=start_line,
+                                     set_columns=set_columns, to_numeric=to_numeric)
+            result[tbl_name] = df
+        return result
+
+    # Single table (named or unnamed) -> return DataFrame
+    start = named_tables[next(iter(named_tables))] if named_tables else 0
+    df, _ = _parse_org_table(contents, start=start,
+                             set_columns=set_columns, to_numeric=to_numeric)
     return df
 
 
