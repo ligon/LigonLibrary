@@ -558,10 +558,14 @@ def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=N
     else:
         start = 0
 
-    # Advance past any #+option lines to the first table row
+    # Advance past #+option lines and blank lines to the first table row
     i = start
-    while i < len(contents) and contents[i].strip().startswith('#+'):
-        i += 1
+    while i < len(contents):
+        stripped = contents[i].strip()
+        if stripped.startswith('#+') or not stripped:
+            i += 1
+        else:
+            break
 
     # Parse the table
     columns = None
