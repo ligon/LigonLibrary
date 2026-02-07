@@ -509,6 +509,91 @@ def _decrypt_with_gpg(stream, path_hint=None):
     return None, "; ".join(filter(None, errors))
 
 
+def df_from_orgfile(fn, name=None, set_columns=True, to_numeric=True, encoding=None):
+    """Read an org-mode table from a ``.org`` file and return a DataFrame.
+
+    Parameters
+    ----------
+    fn : str | Path | file-like
+        Path to the ``.org`` file, or an open text-mode file handle.
+    name : str, optional
+        The ``#+name:`` label of the target table.  If ``None``, the first
+        table in the file is used.
+    set_columns : bool
+        When ``True`` (default), treat the first row of the table as column
+        headers.
+    to_numeric : bool
+        When ``True`` (default), attempt to convert columns to numeric types.
+    encoding : str, optional
+        File encoding (passed to ``open()``).
+
+    Returns
+    -------
+    pandas.DataFrame
+    """
+    # Read file contents
+    if hasattr(fn, 'read'):
+        contents = fn.readlines()
+        if contents and isinstance(contents[0], bytes):
+            contents = [line.decode(encoding or 'utf-8') for line in contents]
+    else:
+        with open(fn, 'r', encoding=encoding) as f:
+            contents = f.readlines()
+
+    # Locate the target table
+    if name is not None:
+        target = f'#+name: {name}'.lower()
+        name_lines = [
+            i for i, s in enumerate(contents) if s.strip().lower() == target
+        ]
+        if not name_lines:
+            warnings.warn(f'No table named {name!r} found.')
+            return pd.DataFrame()
+        if len(name_lines) > 1:
+            warnings.warn(
+                f'Multiple tables named {name!r}; reading the first one '
+                f'(line {name_lines[0] + 1}).'
+            )
+        start = name_lines[0]
+    else:
+        start = 0
+
+    # Advance past any #+option lines to the first table row
+    i = start
+    while i < len(contents) and contents[i].strip().startswith('#+'):
+        i += 1
+
+    # Parse the table
+    columns = None
+    rows: list[list[str]] = []
+
+    while i < len(contents):
+        line = contents[i].strip()
+        if not line or line[0] != '|':
+            break
+        if line.startswith('|-'):
+            i += 1
+            continue
+        cells = [c.strip() for c in line.split('|')[1:-1]]
+        if set_columns and columns is None:
+            columns = cells
+        else:
+            rows.append(cells)
+        i += 1
+
+    df = pd.DataFrame(rows, columns=columns)
+    df = df.replace({'---': np.nan, '': np.nan})
+
+    if to_numeric:
+        for col in df.columns:
+            try:
+                df[col] = pd.to_numeric(df[col])
+            except (ValueError, TypeError):
+                pass
+
+    return df
+
+
 def _format_hints(header: bytes, path_hint=None):
     """Return ordered format hints like ['csv', 'excel', ...] based on magic and suffix."""
     hints = []
@@ -562,6 +647,7 @@ def _format_hints(header: bytes, path_hint=None):
             ".sav": "spss",
             ".dta": "dta",
             ".fwf": "fwf",
+            ".org": "org",
         }
         add(ext_map.get(suffix))
 
@@ -638,13 +724,15 @@ def get_dataframe(fn,convert_categoricals=True,encoding=None,categories_only=Fal
             "excel": lambda: pd.read_excel(stream,sheet_name=sheet),
             "feather": lambda: pd.read_feather(stream),
             "fwf": lambda: pd.read_fwf(stream),
+            "org": lambda: df_from_orgfile(stream if isinstance(stream, (str, Path)) else path_hint,
+                                           encoding=encoding),
         }
 
         order = []
         for hint in format_hints:
             if hint in readers and hint not in order:
                 order.append(hint)
-        for fallback in ["spss","parquet","dta","csv","excel","feather","fwf"]:
+        for fallback in ["spss","parquet","dta","csv","excel","feather","fwf","org"]:
             if fallback not in order:
                 order.append(fallback)
 
