@@ -311,11 +311,30 @@ def write_sheet(
         service_credentials = credential_obj
     else:
         json_info = get_credentials()
-        service_account_info = _select_service_account_info(json_info)
-        service_credentials = Credentials.from_service_account_info(
-            service_account_info, scopes=scope
-        )
-        gc = gspread.authorize(service_credentials)
+        if not json_info:
+            raise RuntimeError("No valid credentials found.")
+        # Try each available service account until one can open the sheet.
+        gc = None
+        service_credentials = None
+        for account_email, account_info in json_info.items():
+            creds = Credentials.from_service_account_info(account_info, scopes=scope)
+            client = gspread.authorize(creds)
+            if not key:
+                # Creating a new sheet — any account will do.
+                gc, service_credentials = client, creds
+                break
+            try:
+                client.open_by_key(key)
+                gc, service_credentials = client, creds
+                break
+            except (APIError, PermissionError):
+                warnings.warn(
+                    f"write_sheet: {account_email} cannot access {key}, trying next."
+                )
+        if gc is None or service_credentials is None:
+            raise RuntimeError(
+                f"No service account has write access to {key}."
+            )
 
     try:
         spread = Spread(key, creds=service_credentials)
