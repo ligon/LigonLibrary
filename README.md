@@ -52,7 +52,7 @@ Requires Python 3.11+.
 ### Other
 
 - **`email_from_ligon(...)`** — Send email via the Gmail API.
-- **`get_password_for_machine(host)`** — Look up a password in a GPG-encrypted `~/.authinfo.gpg` file.
+- **`get_password_for_machine(host)`** — Look up a password in a GPG-encrypted `~/.authinfo.gpg` file, with fallback to `pass` (password-store).
 
 ## License
 
