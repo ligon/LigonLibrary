@@ -1,6 +1,6 @@
 POETRY = poetry
 
-.PHONY: setup test build wheel clean release
+.PHONY: setup test build wheel publish clean release
 
 setup: .venv/pyvenv.cfg
 
@@ -16,6 +16,9 @@ build: setup
 
 wheel: build
 
+publish: build
+	$(POETRY) publish
+
 # Usage: make release BUMP=patch  (or minor, major, prepatch, etc.)
 BUMP ?= patch
 release: build
@@ -23,7 +26,7 @@ release: build
 	git add pyproject.toml
 	git commit -m "Bump version to $(NEW_VER)"
 	git tag v$(NEW_VER)
-	@echo "Tagged v$(NEW_VER). Run 'git push && git push --tags' to publish."
+	@echo "Tagged v$(NEW_VER). Run 'git push && git push --tags && make publish' to publish."
 
 clean:
 	rm -rf dist/ build/ *.egg-info
