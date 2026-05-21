@@ -5,18 +5,24 @@ fuzzy string matching, and more.
 
 ## Installation
 
-Install directly from GitHub:
+From PyPI:
 
 ```bash
-pip install git+https://github.com/ligon/LigonLibrary.git
+pip install ligonlibrary
 ```
 
-Or add to your project's dependencies (e.g. in `pyproject.toml`):
+Or pin in your project's dependencies (e.g. in `pyproject.toml`):
 
 ```toml
 dependencies = [
-    "ligonlibrary @ git+https://github.com/ligon/LigonLibrary.git",
+    "ligonlibrary>=0.2.1",
 ]
+```
+
+To install the development version straight from GitHub:
+
+```bash
+pip install git+https://github.com/ligon/LigonLibrary.git
 ```
 
 Requires Python 3.11+.

@@ -1,12 +1,39 @@
 [project]
 name = "ligonlibrary"
-version = "0.2.0"
-description = "Various little hacks."
+version = "0.2.1"
+description = "Utilities for DataFrames, Google Sheets, fuzzy string matching, GPG-encrypted credentials, and other little hacks."
 requires-python = ">=3.11"
 readme = "README.md"
-authors = [ {name = "Ethan Ligon", email = "ligon@berkeley.edu"}
-    ]
 license = {text = "BSD-3-Clause"}
+authors = [
+    {name = "Ethan Ligon", email = "ligon@berkeley.edu"},
+]
+keywords = [
+    "pandas",
+    "dataframe",
+    "google-sheets",
+    "org-mode",
+    "fuzzy-matching",
+    "stata",
+    "gpg",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
 dependencies = [
     "pandas>=2.3.1",
     "google-auth-oauthlib>=1.2.2",
@@ -19,23 +46,22 @@ dependencies = [
     "openpyxl>=3.1.5",
 ]
 
-[tool.poetry]
+[project.urls]
+Homepage = "https://github.com/ligon/LigonLibrary"
+Repository = "https://github.com/ligon/LigonLibrary"
+Issues = "https://github.com/ligon/LigonLibrary/issues"
+Changelog = "https://github.com/ligon/LigonLibrary/blob/master/CHANGELOG.md"
 
-[tool.poetry.dependencies]
-pandas = "^2.3.1"
-google-auth-oauthlib = "^1.2.2"
-thefuzz = "^0.22.1"
-google-api-python-client = "^2.178.0"
-gspread = "^5.12.0"
-gspread-pandas = "^3.3.0"
-python-gnupg = "^0.5.2"
-python-magic = "^0.4.27"
-openpyxl = "^3.1.5"
+[tool.poetry]
+packages = [{include = "ligonlibrary"}]
+include = [
+    {path = "CHANGELOG.md", format = "sdist"},
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0"
 ipython = "^8.12"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0"]
 build-backend = "poetry.core.masonry.api"

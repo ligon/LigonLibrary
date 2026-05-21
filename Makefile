@@ -1,6 +1,6 @@
 POETRY = poetry
 
-.PHONY: setup test build wheel publish clean release
+.PHONY: setup test build wheel check publish clean release
 
 setup: .venv/pyvenv.cfg
 
@@ -12,21 +12,34 @@ test: setup
 	$(POETRY) run pytest
 
 build: setup
+	rm -rf dist/
 	$(POETRY) build
 
 wheel: build
 
-publish: build
+check: build
+	$(POETRY) run python -m pip install --quiet --upgrade twine
+	$(POETRY) run twine check dist/*
+
+publish: check
 	$(POETRY) publish
 
-# Usage: make release BUMP=patch  (or minor, major, prepatch, etc.)
+# Usage: make release BUMP=patch   (or minor, major, prepatch, etc.)
+# Bumps the version, commits pyproject.toml + CHANGELOG.md, and tags.
+# Push the tag to trigger the Release workflow:
+#   git push && git push --tags
 BUMP ?= patch
-release: build
+release: setup
 	$(eval NEW_VER := $(shell $(POETRY) version $(BUMP) -s))
-	git add pyproject.toml
+	@echo "Releasing v$(NEW_VER)"
+	$(MAKE) check
+	git add pyproject.toml CHANGELOG.md 2>/dev/null || git add pyproject.toml
 	git commit -m "Bump version to $(NEW_VER)"
-	git tag v$(NEW_VER)
-	@echo "Tagged v$(NEW_VER). Run 'git push && git push --tags && make publish' to publish."
+	git tag -a v$(NEW_VER) -m "Release v$(NEW_VER)"
+	@echo
+	@echo "Tagged v$(NEW_VER)."
+	@echo "Next: git push && git push --tags"
+	@echo "(The Release workflow will build and publish to PyPI on tag push.)"
 
 clean:
 	rm -rf dist/ build/ *.egg-info
