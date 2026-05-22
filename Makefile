@@ -1,6 +1,6 @@
 POETRY = poetry
 
-.PHONY: setup test build wheel check publish clean release
+.PHONY: setup test build wheel check publish clean release release-notes
 
 setup: .venv/pyvenv.cfg
 
@@ -23,6 +23,11 @@ check: build
 
 publish: check
 	$(POETRY) publish
+
+# Scaffold a new CHANGELOG.md section from commits since the last v* tag.
+# Bullets land under `## [Unreleased]` for you to organize before releasing.
+release-notes:
+	@./scripts/release-notes.sh CHANGELOG.md
 
 # Usage: make release BUMP=patch   (or minor, major, prepatch, etc.)
 # Bumps the version, commits pyproject.toml + CHANGELOG.md, and tags.
