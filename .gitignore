@@ -20,3 +20,6 @@ htmlcov/
 .vscode/
 *.swp
 *~
+
+# SuCoder per-mirror session state
+.coder-session/
