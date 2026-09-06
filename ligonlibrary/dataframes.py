@@ -400,6 +400,23 @@ def _coerce_label(value, encoding):
     So the failures are now caught instead of ignored, and a value that does
     not survive the round trip is returned UNCHANGED: not being double-encoded
     is the normal case, not an error.  `errors="ignore"` was the whole defect.
+
+    The encode side is pinned to latin-1 rather than taking `encoding`, and
+    that is not a simplification.  `from_dta` is this function's only caller,
+    and the string it passes always came out of pandas, which decodes a .dta
+    with latin-1 -- by declaration below format 118, and as the fallback above
+    it (`stata.py:1126`).  latin-1 is therefore the codec that *did the
+    damage*, whatever the caller declares, and only its inverse recovers the
+    file's bytes.  Spelling it `encoding` instead makes the repair silently
+    no-op the moment a caller declares anything else: a real .dta holding the
+    UTF-8 bytes of "Côte d’Ivoire" reaches us as "CÃ´te dâ\x80\x99Ivoire",
+    which `encoding="cp1252"` cannot even encode (U+0080 is undefined there),
+    so it raises and the label is returned still broken.  Declaring
+    "iso-8859-1" repaired it; declaring "cp1252" did not.  Same file.
+
+    `encoding` still selects the codec for raw `bytes`, where the caller's
+    declaration genuinely is the file's encoding, and still gates whether any
+    of this runs at all.
     """
     if encoding is None or value is None:
         return value
@@ -409,7 +426,9 @@ def _coerce_label(value, encoding):
         except UnicodeDecodeError:
             return value.decode(encoding, errors="replace")
     try:
-        return str(value).encode(encoding).decode("utf-8")
+        # latin-1, not `encoding`: pandas is what mis-decoded this, and pandas
+        # always mis-decodes as latin-1.  See the docstring.
+        return str(value).encode("latin-1").decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
         return str(value)
 
