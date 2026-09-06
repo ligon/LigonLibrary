@@ -382,35 +382,24 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
 
     return df
 def _coerce_label(value, encoding):
-    """Return `value` re-decoded from `encoding`.
+    """Undo a double-encoding of `value`, or leave it alone.
 
-    `pandas.io.stata.StataReader` has no `encoding` parameter (it was removed
-    in pandas 2.0), so when a .dta holds bytes that are not valid UTF-8 pandas
-    falls back to latin-1 and warns.  The string handed back is therefore a
-    *byte container*: latin-1 maps bytes 0-255 onto codepoints 0-255, one to
-    one, so the original bytes survive intact and can be recovered with
-    ``.encode("latin-1")``.
+    The case this exists for is *mojibake*: text that was UTF-8, written by
+    software that decoded it as `encoding` (usually latin-1), so "Café"
+    arrives as "CafÃ©".  The repair is to put the bytes back and decode them
+    as UTF-8 -- the same idiom as a `_decode_mojibake` hook::
 
-    The repair is consequently to *reverse the fallback* -- take the bytes
-    back out and decode them with the encoding the caller declared.  The
-    previous implementation instead encoded with the caller's encoding and
-    decoded as UTF-8, which is not the inverse of anything, and with
-    ``errors="ignore"`` it silently DELETED every character the target
-    codec could not represent::
+        "CafÃ©".encode("iso-8859-1").decode("utf-8")  ->  "Café"
 
-        iso-8859-2  "Durdevdan" (with D-stroke)  ->  "urevdan"
-        cp1252      "Cote d'Ivoire" (curly)      ->  "Cte dIvoire"
-        iso-8859-1  "Cafe" (with acute)          ->  "Caf"
+    That direction is correct and is kept.  The bug was ``errors="ignore"``,
+    which made the operation LOSSY on text that was never double-encoded:
+    plain latin-1 "Boîte de tomate" encodes to ``b"Bo\xeete..."``, 0xEE is not
+    a valid UTF-8 start byte, and ignoring the error DELETED the character --
+    "Bote de tomate".  Silently.
 
-    Note the third: even latin-1 in, latin-1 out lost its accent.  The
-    parameter meant to FIX mis-encoded labels was the only thing corrupting
-    them -- passing no `encoding` left the (recoverable) mojibake alone.
-
-    Failures are left alone rather than ignored.  If the value did not come
-    from the latin-1 fallback -- pandas decoded it as UTF-8 successfully, say
-    -- then ``.encode("latin-1")`` raises, and returning the value unchanged
-    is right: it is already correct, and forcing a round-trip would corrupt
-    it.  Same for a byte sequence that is not valid in `encoding`.
+    So the failures are now caught instead of ignored, and a value that does
+    not survive the round trip is returned UNCHANGED: not being double-encoded
+    is the normal case, not an error.  `errors="ignore"` was the whole defect.
     """
     if encoding is None or value is None:
         return value
@@ -420,7 +409,7 @@ def _coerce_label(value, encoding):
         except UnicodeDecodeError:
             return value.decode(encoding, errors="replace")
     try:
-        return str(value).encode("latin-1").decode(encoding)
+        return str(value).encode(encoding).decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
         return str(value)
 
@@ -448,19 +437,7 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
         except struct.error as exc:
             raise ValueError("Not a Stata file?") from exc
 
-        # Whether pandas fell back to latin-1 is the ONLY reliable signal that
-        # the labels need re-decoding, and pandas states it in a UnicodeWarning
-        # rather than in the returned value.  Catching it makes the repair in
-        # `_coerce_label` conditional instead of unconditional: a file pandas
-        # decoded as UTF-8 is already correct, and round-tripping it through
-        # latin-1 would corrupt any label that happens to be latin-1
-        # representable ("naïve" -> "naďve" under iso-8859-2).
-        with warnings.catch_warnings(record=True) as _caught:
-            warnings.simplefilter("always", UnicodeWarning)
-            values = reader.value_labels()
-        fell_back = any(issubclass(w.category, UnicodeWarning) for w in _caught)
-        for w in _caught:                      # do not swallow it
-            warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
+        values = reader.value_labels()
         try:
             var_names = reader.varlist
             label_names = reader.lbllist
@@ -481,7 +458,7 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
             except KeyError:
                 warnings.warn(f"Issue with categorical mapping: {var}", RuntimeWarning)
                 continue
-            if encoding and fell_back:
+            if encoding:
                 code_to_label = {
                     code: _coerce_label(label, encoding) for code, label in code_to_label.items()
                 }
