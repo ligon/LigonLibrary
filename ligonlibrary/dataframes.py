@@ -382,12 +382,47 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
 
     return df
 def _coerce_label(value, encoding):
-    """Return `value` recoded to UTF-8 using the supplied encoding."""
+    """Return `value` re-decoded from `encoding`.
+
+    `pandas.io.stata.StataReader` has no `encoding` parameter (it was removed
+    in pandas 2.0), so when a .dta holds bytes that are not valid UTF-8 pandas
+    falls back to latin-1 and warns.  The string handed back is therefore a
+    *byte container*: latin-1 maps bytes 0-255 onto codepoints 0-255, one to
+    one, so the original bytes survive intact and can be recovered with
+    ``.encode("latin-1")``.
+
+    The repair is consequently to *reverse the fallback* -- take the bytes
+    back out and decode them with the encoding the caller declared.  The
+    previous implementation instead encoded with the caller's encoding and
+    decoded as UTF-8, which is not the inverse of anything, and with
+    ``errors="ignore"`` it silently DELETED every character the target
+    codec could not represent::
+
+        iso-8859-2  "Durdevdan" (with D-stroke)  ->  "urevdan"
+        cp1252      "Cote d'Ivoire" (curly)      ->  "Cte dIvoire"
+        iso-8859-1  "Cafe" (with acute)          ->  "Caf"
+
+    Note the third: even latin-1 in, latin-1 out lost its accent.  The
+    parameter meant to FIX mis-encoded labels was the only thing corrupting
+    them -- passing no `encoding` left the (recoverable) mojibake alone.
+
+    Failures are left alone rather than ignored.  If the value did not come
+    from the latin-1 fallback -- pandas decoded it as UTF-8 successfully, say
+    -- then ``.encode("latin-1")`` raises, and returning the value unchanged
+    is right: it is already correct, and forcing a round-trip would corrupt
+    it.  Same for a byte sequence that is not valid in `encoding`.
+    """
     if encoding is None or value is None:
         return value
     if isinstance(value, bytes):
-        return value.decode(encoding, errors="ignore")
-    return str(value).encode(encoding, errors="ignore").decode("utf-8", errors="ignore")
+        try:
+            return value.decode(encoding)
+        except UnicodeDecodeError:
+            return value.decode(encoding, errors="replace")
+    try:
+        return str(value).encode("latin-1").decode(encoding)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return str(value)
 
 
 def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False):
@@ -413,7 +448,19 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
         except struct.error as exc:
             raise ValueError("Not a Stata file?") from exc
 
-        values = reader.value_labels()
+        # Whether pandas fell back to latin-1 is the ONLY reliable signal that
+        # the labels need re-decoding, and pandas states it in a UnicodeWarning
+        # rather than in the returned value.  Catching it makes the repair in
+        # `_coerce_label` conditional instead of unconditional: a file pandas
+        # decoded as UTF-8 is already correct, and round-tripping it through
+        # latin-1 would corrupt any label that happens to be latin-1
+        # representable ("naïve" -> "naďve" under iso-8859-2).
+        with warnings.catch_warnings(record=True) as _caught:
+            warnings.simplefilter("always", UnicodeWarning)
+            values = reader.value_labels()
+        fell_back = any(issubclass(w.category, UnicodeWarning) for w in _caught)
+        for w in _caught:                      # do not swallow it
+            warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
         try:
             var_names = reader.varlist
             label_names = reader.lbllist
@@ -434,7 +481,7 @@ def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False
             except KeyError:
                 warnings.warn(f"Issue with categorical mapping: {var}", RuntimeWarning)
                 continue
-            if encoding:
+            if encoding and fell_back:
                 code_to_label = {
                     code: _coerce_label(label, encoding) for code, label in code_to_label.items()
                 }
