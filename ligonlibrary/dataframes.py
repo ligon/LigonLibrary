@@ -382,12 +382,55 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
 
     return df
 def _coerce_label(value, encoding):
-    """Return `value` recoded to UTF-8 using the supplied encoding."""
+    """Undo a double-encoding of `value`, or leave it alone.
+
+    The case this exists for is *mojibake*: text that was UTF-8, written by
+    software that decoded it as `encoding` (usually latin-1), so "Café"
+    arrives as "CafÃ©".  The repair is to put the bytes back and decode them
+    as UTF-8 -- the same idiom as a `_decode_mojibake` hook::
+
+        "CafÃ©".encode("iso-8859-1").decode("utf-8")  ->  "Café"
+
+    That direction is correct and is kept.  The bug was ``errors="ignore"``,
+    which made the operation LOSSY on text that was never double-encoded:
+    plain latin-1 "Boîte de tomate" encodes to ``b"Bo\xeete..."``, 0xEE is not
+    a valid UTF-8 start byte, and ignoring the error DELETED the character --
+    "Bote de tomate".  Silently.
+
+    So the failures are now caught instead of ignored, and a value that does
+    not survive the round trip is returned UNCHANGED: not being double-encoded
+    is the normal case, not an error.  `errors="ignore"` was the whole defect.
+
+    The encode side is pinned to latin-1 rather than taking `encoding`, and
+    that is not a simplification.  `from_dta` is this function's only caller,
+    and the string it passes always came out of pandas, which decodes a .dta
+    with latin-1 -- by declaration below format 118, and as the fallback above
+    it (`stata.py:1126`).  latin-1 is therefore the codec that *did the
+    damage*, whatever the caller declares, and only its inverse recovers the
+    file's bytes.  Spelling it `encoding` instead makes the repair silently
+    no-op the moment a caller declares anything else: a real .dta holding the
+    UTF-8 bytes of "Côte d’Ivoire" reaches us as "CÃ´te dâ\x80\x99Ivoire",
+    which `encoding="cp1252"` cannot even encode (U+0080 is undefined there),
+    so it raises and the label is returned still broken.  Declaring
+    "iso-8859-1" repaired it; declaring "cp1252" did not.  Same file.
+
+    `encoding` still selects the codec for raw `bytes`, where the caller's
+    declaration genuinely is the file's encoding, and still gates whether any
+    of this runs at all.
+    """
     if encoding is None or value is None:
         return value
     if isinstance(value, bytes):
-        return value.decode(encoding, errors="ignore")
-    return str(value).encode(encoding, errors="ignore").decode("utf-8", errors="ignore")
+        try:
+            return value.decode(encoding)
+        except UnicodeDecodeError:
+            return value.decode(encoding, errors="replace")
+    try:
+        # latin-1, not `encoding`: pandas is what mis-decoded this, and pandas
+        # always mis-decodes as latin-1.  See the docstring.
+        return str(value).encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return str(value)
 
 
 def from_dta(fn, convert_categoricals=True, encoding=None, categories_only=False):
