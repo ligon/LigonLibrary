@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-07
+
+### Fixed
+- `from_dta(..., encoding=...)` no longer deletes characters from value
+  labels.  `_coerce_label` passed `errors="ignore"` on both ends of its
+  round trip, so every character the target codec could not represent
+  was dropped without a word: `Boîte de tomate` came back as
+  `Bote de tomate`.  Failures are now caught and the value returned
+  unchanged — text that was never double-encoded is the normal case,
+  not an error — and raw bytes use `errors="replace"` so a genuine loss
+  stays visible.
+- `_coerce_label` now reverses the decode that actually mangled the
+  label.  pandas reads a `.dta` as latin-1 — by declaration below Stata
+  format 118, as the fallback above it — so latin-1's inverse is what
+  recovers the file's bytes.  Taking the caller's declared `encoding`
+  there made the repair a silent no-op for any other declaration: one
+  file holding the UTF-8 bytes of `Côte d’Ivoire` was repaired under
+  `encoding="iso-8859-1"` and returned still broken under
+  `encoding="cp1252"`.
+
+  Only callers passing `encoding=` are affected; the parameter still
+  selects the codec for raw `bytes` input and still gates the repair.
+
+### Changed
+- Regenerated `poetry.lock`, which had drifted from `pyproject.toml`
+  since the 0.2.1 packaging changes.  `poetry install` had aborted on
+  every CI run since May, so no test had actually executed on `master`
+  or on any pull request in that window.  No dependency versions moved.
+- `.coder-session/` is now ignored.
+
 ## [0.2.1] - 2026-05-21
 
 ### Changed
@@ -46,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Unused DVC handling from `get_dataframe()`.
 
-[Unreleased]: https://github.com/ligon/LigonLibrary/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/ligon/LigonLibrary/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/ligon/LigonLibrary/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/ligon/LigonLibrary/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ligon/LigonLibrary/releases/tag/v0.2.0
