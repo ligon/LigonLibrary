@@ -42,7 +42,13 @@ dependencies = [
     "gspread>=5.12.0",
     "gspread-pandas>=3.3.0",
     "python-gnupg>=0.5.2",
-    "python-magic>=0.4.27",
+    # python-magic is only a ctypes wrapper and needs a system libmagic.
+    # Windows has none, and there the import does not fail -- it HANGS in
+    # magic/compat.py's loader (seen on windows-latest, LSMS_Library PR
+    # #965), so the ImportError guard in dataframes.py never fires.
+    # python-magic-bin bundles the DLL and provides the same `magic` module.
+    "python-magic>=0.4.27; sys_platform != 'win32'",
+    "python-magic-bin>=0.4.14; sys_platform == 'win32'",
     "openpyxl>=3.1.5",
 ]
 
