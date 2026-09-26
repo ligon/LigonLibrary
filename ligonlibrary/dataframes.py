@@ -417,6 +417,13 @@ def _coerce_label(value, encoding):
     `encoding` still selects the codec for raw `bytes`, where the caller's
     declaration genuinely is the file's encoding, and still gates whether any
     of this runs at all.
+
+    KNOWN AND ACCEPTED: a label that is ALREADY correct, but whose latin-1
+    bytes happen to be valid UTF-8, is rewritten anyway -- "Â©" becomes "©".
+    Almost always that is the wanted answer, since "Â©" really is how "©"
+    arrives mangled; but a label genuinely meant to read "Â©" is changed
+    silently, and nothing here can separate the two.  The raw bytes could
+    have, and they are gone by the time this sees a `str`.
     """
     if encoding is None or value is None:
         return value
