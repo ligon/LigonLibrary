@@ -378,7 +378,7 @@ def orgtbl_to_df(table, col_name_size=1, format_string=None, index=None, dtype=N
     df = pd.DataFrame(table[col_name_size:], columns=new_colnames, dtype=dtype)
 
     if index:
-        df.set_index(index, inplace=True)
+        df = df.set_index(index)
 
     return df
 def _coerce_label(value, encoding):

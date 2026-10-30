@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arbitrary files to `read_excel`.
 - CI runs with `permissions: contents: read`; Dependabot now watches
   pip and GitHub Actions dependencies.
+- Refreshed `poetry.lock`, clearing the 37 `pip-audit` advisories
+  against the previous lock (urllib3 2.8.0, pyasn1 0.6.5, oauthlib
+  4.0.0, protobuf 7.36.2, requests 2.34.2, httplib2, idna, pygments,
+  pytest).  The old lock resolved `rsa` to 4.2 on Python >= 3.13;
+  google-auth 2.62 no longer depends on `rsa`.  The lock now carries
+  pandas 3.1, gspread 6.2 and gspread-pandas 4.2, which PyPI installs
+  were already resolving to, since `pyproject.toml` sets floors only.
+
+### Changed
+- `orgtbl_to_df` no longer uses `set_index(inplace=True)`, deprecated
+  in pandas 3.1.
 
 ## [0.2.2] - 2026-09-07
 
