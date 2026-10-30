@@ -50,6 +50,9 @@ dependencies = [
     "python-magic>=0.4.27; sys_platform != 'win32'",
     "python-magic-bin>=0.4.14; sys_platform == 'win32'",
     "openpyxl>=3.1.5",
+    # openpyxl hardens its XML parsing (entity-expansion bombs) only when
+    # defusedxml is importable; get_dataframe feeds arbitrary files to it.
+    "defusedxml>=0.7.1",
 ]
 
 [project.urls]

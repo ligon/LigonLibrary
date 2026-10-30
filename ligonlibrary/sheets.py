@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 import warnings
@@ -45,10 +46,17 @@ def decrypt_credentials(
         Each decrypted file is saved under the service account's email.
     """
     destination_path = Path(destination) if destination is not None else _default_key_destination()
-    destination_path.mkdir(parents=True, exist_ok=True)
+    # Plaintext keys land here; keep the directory private to the owner.
+    # An existing directory's mode is left alone, but we warn if others can enter it.
+    destination_path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix" and destination_path.stat().st_mode & 0o077:
+        warnings.warn(
+            f"{destination_path} is accessible to group/other; "
+            f"consider `chmod 700 {destination_path}`."
+        )
 
     gpg = gnupg.GPG()
-    passphrase = input(
+    passphrase = getpass.getpass(
         f"Input secret passphrase for {encrypted_key_file} to create google drive credentials: "
     )
     with open(encrypted_key_file, "rb") as encrypted_file:
@@ -62,8 +70,17 @@ def decrypt_credentials(
         raise RuntimeError(f"Unable to create decrypted file: {status.status}")
 
     account_data = json.loads(status.data)
-    credential_path = destination_path / account_data[SERVICE_ACCOUNT_EMAIL_FIELD]
-    with credential_path.open("w") as output_file:
+    account_email = str(account_data[SERVICE_ACCOUNT_EMAIL_FIELD])
+    # The filename comes from the decrypted payload; refuse anything that
+    # would escape destination_path.
+    if account_email in ("", ".", "..") or Path(account_email).name != account_email or "\\" in account_email:
+        raise ValueError(f"Unsafe {SERVICE_ACCOUNT_EMAIL_FIELD} for a filename: {account_email!r}")
+    credential_path = destination_path / account_email
+    # Create owner-only (0600); fchmod also tightens a pre-existing file.
+    fd = os.open(credential_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    if hasattr(os, "fchmod"):
+        os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as output_file:
         json.dump(account_data, output_file)
 
     return credential_path

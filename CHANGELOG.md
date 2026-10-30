@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- `decrypt_credentials` now writes the plaintext service-account key
+  with mode 0600 (tightening a pre-existing file too) and creates its
+  directory 0700.  It previously inherited the umask, which on a shared
+  host with umask 022 left the key world-readable.  An existing
+  directory open to group/other draws a warning rather than a silent
+  `chmod`.
+- The GPG passphrase prompt uses `getpass` instead of `input()`, so the
+  passphrase no longer echoes to the terminal.
+- `decrypt_credentials` refuses a `client_email` that would escape the
+  destination directory when used as a filename.
+- `defusedxml` is now a dependency.  openpyxl hardens its XML parsing
+  only when `defusedxml` is importable, and `get_dataframe` hands
+  arbitrary files to `read_excel`.
+- CI runs with `permissions: contents: read`; Dependabot now watches
+  pip and GitHub Actions dependencies.
+
 ## [0.2.2] - 2026-09-07
 
 ### Fixed
