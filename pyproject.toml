@@ -68,7 +68,7 @@ include = [
 ]
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^9.0"
+pytest = "^9.1"
 ipython = "^8.12"
 
 [build-system]
