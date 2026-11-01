@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-01
+
 ### Security
 - `decrypt_credentials` now writes the plaintext service-account key
   with mode 0600 (tightening a pre-existing file too) and creates its
@@ -34,6 +36,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `orgtbl_to_df` no longer uses `set_index(inplace=True)`, deprecated
   in pandas 3.1.
+- CI and release workflows move to actions/checkout v7,
+  actions/setup-python v7, actions/upload-artifact v7 and
+  actions/download-artifact v8 (off the deprecated Node.js 20 runtime).
+  download-artifact v8 fails the release on an artifact digest
+  mismatch rather than warning.
+- Development lock: certifi 2026.10.19 (emSign/eMudhra CA incident) and
+  IPython 9 in the dev group.
+
+## [0.2.3] - 2026-09-26
+
+Published to PyPI from commit `2a3781a`; no `v0.2.3` tag exists.
+
+### Fixed
+- On Windows, depend on `python-magic-bin` instead of `python-magic`.
+  `python-magic` needs a system libmagic, and without one
+  `import magic` hung in its loader rather than raising, so importing
+  `ligonlibrary` blocked indefinitely.  Linux and macOS keep
+  `python-magic`.
+
+### Changed
+- `_coerce_label` records the false positive its repair cannot avoid:
+  a label already reading "Â©" is rewritten to "©".
 
 ## [0.2.2] - 2026-09-07
 
@@ -104,7 +128,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Unused DVC handling from `get_dataframe()`.
 
-[Unreleased]: https://github.com/ligon/LigonLibrary/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/ligon/LigonLibrary/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/ligon/LigonLibrary/compare/2a3781a...v0.2.4
+[0.2.3]: https://github.com/ligon/LigonLibrary/compare/v0.2.2...2a3781a
 [0.2.2]: https://github.com/ligon/LigonLibrary/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/ligon/LigonLibrary/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ligon/LigonLibrary/releases/tag/v0.2.0
